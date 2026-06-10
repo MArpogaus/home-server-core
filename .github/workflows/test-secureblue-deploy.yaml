@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
       - name: Install dependencies
         run: |
@@ -122,7 +122,7 @@ jobs:
 
       - name: Upload VM logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@0b2256b8c012f0828dc542b5fe7124c97d5d9f9d # v4.3.0
         with:
           name: vm-logs
           path: |
