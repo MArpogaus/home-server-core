@@ -1,0 +1,31 @@
+---
+# Btrfs device
+btrfs_device: /dev/sda2
+
+# Service users (non-login accounts for containerized services)
+bmc_users:
+  - name: nextcloud
+    uid: 82
+    home: /var/services/nextcloud
+  - name: proxy
+    uid: 1000
+    home: /var/services/proxy
+
+# Snapshot settings
+btrfs_snapshot_dir: /snapshots
+btrfs_snapshot_retention_days: 30
+btrfs_snapshot_schedule: "daily"
+
+# SELinux
+selinux_relabel_home: true
+
+# Podman
+podman_packages:
+  - podman
+  - podman-plugins
+btrfs_packages:
+  - btrfs-progs
+selinux_packages:
+  - policycoreutils-python-utils
+other_packages:
+  - acl

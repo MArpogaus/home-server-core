@@ -1,0 +1,84 @@
+---
+- name: Base system setup (Btrfs, Users, SELinux, Snapshots)
+  hosts: all
+  become: true
+  roles:
+    - base_setup
+
+- name: Deploy container services (Quadlet)
+  hosts: all
+  become: true
+  roles:
+    - service_deploy
+
+- name: Deploy Nextcloud config files
+  hosts: all
+  become: true
+  tasks:
+    - name: Copy Nextcloud config files to systemd user dir
+      ansible.builtin.copy:
+        src: "{{ item.src }}"
+        dest: "/var/services/nextcloud/.config/systemd/user/{{ item.dst }}"
+        owner: nextcloud
+        mode: "0644"
+      loop:
+        - { src: ../service-nextcloud/containers/configs/nginx.conf, dst: configs/nginx.conf }
+        - { src: ../service-nextcloud/containers/context/configs/php-config.ini, dst: context/configs/php-config.ini }
+        - { src: ../service-nextcloud/containers/context/configs/prev.config.php, dst: context/configs/prev.config.php }
+        - { src: ../service-nextcloud/containers/context/configs/phone.config.php, dst: context/configs/phone.config.php }
+        - { src: ../service-nextcloud/containers/context/configs/log.config.php, dst: context/configs/log.config.php }
+
+- name: Reload systemd user daemons
+  hosts: all
+  become: true
+  tasks:
+    - name: Reload nextcloud user systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+      become: true
+      become_user: nextcloud
+      environment:
+        HOME: /var/services/nextcloud
+
+    - name: Reload proxy user systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+      become: true
+      become_user: proxy
+      environment:
+        HOME: /var/services/proxy
+
+- name: Enable and start container services
+  hosts: all
+  become: true
+  tasks:
+    - name: Enable Nextcloud services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+      loop:
+        - nextcloud-db
+        - nextcloud-redis
+        - nextcloud-app
+        - nextcloud-cron
+        - nextcloud-push
+        - nextcloud-preview-generator
+        - nextcloud-web
+      become: true
+      become_user: nextcloud
+      environment:
+        HOME: /var/services/nextcloud
+
+    - name: Enable Bunkerweb services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+      loop:
+        - bunker-nginx
+        - bunker-scheduler
+      become: true
+      become_user: proxy
+      environment:
+        HOME: /var/services/proxy

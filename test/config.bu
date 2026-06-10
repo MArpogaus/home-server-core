@@ -1,0 +1,115 @@
+variant: fcos
+version: 1.7.0
+passwd:
+  users:
+    - name: core
+      groups:
+        - wheel
+      password_hash: $y$j9T$mefBCJbp/a49aSkTT4hpE1$6BXtrIuV8856t4A9r/R1GW4aR9eKXxsmB8FXt56Hx70
+      ssh_authorized_keys:
+        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAOsOtZQXtJccysRp30N58HDX2YCxIWuRjHK3fyX8h2p coreos-ansible
+storage:
+  filesystems:
+    - device: /dev/disk/by-partlabel/root
+      wipe_filesystem: true
+      format: btrfs
+      label: root
+  files:
+    - path: /etc/pki/containers/secureblue-2025.pub
+      mode: 0644
+      contents:
+        inline: |
+          -----BEGIN PUBLIC KEY-----
+          MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEdruKsOhUkgdd0lNDHNBymE2Wyb/p
+          GVnx59QbNoGFbImqZLRVt6uQnO9MfiHU9IZiJl9aNetfAqDsgsltAUQnXQ==
+          -----END PUBLIC KEY-----
+    - path: /etc/pki/containers/marpogaus.pub
+      mode: 0644
+      contents:
+        inline: |
+          -----BEGIN PUBLIC KEY-----
+          MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE54diWpeKbUOvhesc4Oe5XOB9VHB
+          bCvOPDIJzZz0XNJsln4vVsWhIMU+GIM20/4ohFk0rNx35l41G8+4vdaAQ==
+          -----END PUBLIC KEY-----
+    - path: /etc/containers/policy.json
+      mode: 0644
+      overwrite: true
+      contents:
+        inline: |
+          {
+            "default": [{"type": "reject"}],
+            "transports": {
+              "docker": {
+                "ghcr.io/secureblue": [
+                  {
+                    "type": "sigstoreSigned",
+                    "keyPath": "/etc/pki/containers/secureblue-2025.pub",
+                    "signedIdentity": {"type": "matchRepository"}
+                  }
+                ]
+              }
+            }
+          }
+    # Polkit rule: allow wheel group to use run0 without password (Ansible automation)
+    - path: /etc/polkit-1/rules.d/60-run0-fast-user-auth.rules
+      mode: 0644
+      contents:
+        inline: |
+          polkit.addRule(function(action, subject) {
+            if (action.id.indexOf("org.freedesktop.") === 0 &&
+                subject.isInGroup("wheel")) {
+              return polkit.Result.YES;
+            }
+          });
+    - path: /opt/install_secureblue.sh
+      mode: 0755
+      contents:
+        inline: |
+          #!/usr/bin/env bash
+          set -e
+
+          # FCOS phase: sudo is available (will be removed by SecureBlue)
+          sudo systemctl disable --now zincati.service 2>/dev/null || true
+          sudo systemctl stop rpm-ostreed-automatic.timer rpm-ostreed-automatic.service 2>/dev/null || true
+
+          echo 'Rebasing to securecore (SecureBlue CoreOS image)...'
+          sudo rpm-ostree rebase ostree-image-signed:docker://ghcr.io/secureblue/securecore-main-hardened:latest
+          status=$?
+
+          if [ "$status" -ne 0 ]; then
+            echo "Error: Secureblue installation failed." >&2
+            exit "$status"
+          else
+            # SecureBlue removes sudo — but polkit rule (written earlier) remains
+            # Copy default policy from new root
+            sudo cp /usr/etc/containers/policy.json /etc/containers/policy.json
+            # Merge marpogaus registry policy
+            POLICY_FILE="/etc/containers/policy.json"
+            jq --arg image_registry "ghcr.io/marpogaus" \
+                '.transports.docker |=
+                { $image_registry: [
+                    {
+                        "type": "sigstoreSigned",
+                        "keyPath": "/etc/pki/containers/marpogaus.pub",
+                        "signedIdentity": {
+                            "type": "matchRepository"
+                        }
+                    }
+                ] } + .' "${POLICY_FILE}" > POLICY.tmp
+            sudo cp POLICY.tmp /etc/containers/policy.json
+            sudo rm POLICY.tmp
+            sudo sed -i -e '/\/opt\/install_secureblue.sh/d' /var/home/core/.bash_profile
+            sudo rm -f /opt/install_secureblue.sh /etc/pki/containers/secureblue-2025.pub
+            echo 'Rebooting...'
+            sleep 5
+            sudo systemctl reboot
+          fi
+    - path: /var/home/core/.bash_profile
+      overwrite: false
+      append:
+        - inline: |
+            /opt/install_secureblue.sh
+systemd:
+  units:
+    - name: qemu-guest-agent.service
+      enabled: true

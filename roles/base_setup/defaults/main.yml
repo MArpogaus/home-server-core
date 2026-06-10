@@ -1,0 +1,14 @@
+---
+# Service users (non-login accounts for containerized services)
+base_setup_bmc_users:
+  - name: nextcloud
+    uid: 82
+    home: /var/services/nextcloud
+  - name: proxy
+    uid: 1001
+    home: /var/services/proxy
+
+# Snapshot settings
+base_setup_btrfs_snapshot_dir: /snapshots
+base_setup_btrfs_snapshot_retention_days: 30
+base_setup_btrfs_snapshot_schedule: "daily"

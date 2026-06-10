@@ -1,0 +1,39 @@
+# Logs
+*.log
+.env*
+
+# Inventory (contains host-specific details)
+inventory/hosts.ini
+
+# SSH Keys (private and public)
+*.key
+*_key
+*.pub
+id_rsa*
+id_ed25519*
+
+# Ignition/Butane (may contain embedded keys)
+test/config.ign
+test/*.key
+test/*.pub
+
+# VM artifacts
+*.qcow2
+*.qcow2.xz
+fcos.qcow2
+
+# Ansible
+*.retry
+.ansible/
+
+# Backup files
+*.bak
+*.backup
+
+# Secrets (private configuration)
+secrets/vars.yml
+inventory/hosts.ini
+
+# OS-specific
+.DS_Store
+Thumbs.db

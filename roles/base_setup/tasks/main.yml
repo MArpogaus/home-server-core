@@ -1,0 +1,95 @@
+---
+# Ignition creates /var as Btrfs partition
+# Ansible creates subvolumes under /var/services/ using systemd-run (no sudo)
+
+- name: Create Btrfs subvolumes under /var/services
+  ansible.builtin.command: "btrfs subvolume create /var/services/{{ item }}"
+  loop:
+    - nextcloud
+    - proxy
+    - snapshots
+  args:
+    creates: "/var/services/{{ item }}"
+  changed_when: true
+
+- name: Create service users (non-login)
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    uid: "{{ item.uid }}"
+    home: "{{ item.home }}"
+    shell: /usr/sbin/nologin
+    createhome: false
+    system: true
+  loop: "{{ base_setup_bmc_users }}"
+
+- name: Set subvolume ownership
+  ansible.builtin.file:
+    path: "/var/services/{{ item.path }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    recurse: true
+  loop:
+    - { path: nextcloud, owner: nextcloud }
+    - { path: proxy, owner: proxy }
+
+- name: Ensure systemd user directories exist
+  ansible.builtin.file:
+    path: "/var/services/{{ item.name }}/.config/systemd/user"
+    state: directory
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+    mode: "0755"
+  loop: "{{ base_setup_bmc_users }}"
+
+- name: Install SELinux file context rules
+  community.general.sefcontext:
+    target: "{{ item }}"
+    setype: container_file_t
+    state: present
+  loop:
+    - "/var/services/nextcloud(/.*)?"
+    - "/var/services/proxy(/.*)?"
+    - "/var/services/snapshots(/.*)?"
+    - "/var/services(/.*)?"
+
+- name: Apply SELinux labels
+  ansible.builtin.command: "restorecon -Rv {{ item }}"
+  loop:
+    - /var/services/nextcloud
+    - /var/services/proxy
+    - /var/services/snapshots
+    - /var/services
+  changed_when: true
+
+- name: Deploy snapshot service template
+  ansible.builtin.template:
+    src: btrfs-snapshot@.service.j2
+    dest: "/etc/systemd/system/btrfs-snapshot@.service"
+    mode: "0644"
+  notify: Restart snapshot services
+
+- name: Deploy snapshot timer template
+  ansible.builtin.template:
+    src: btrfs-snapshot@.timer.j2
+    dest: "/etc/systemd/system/btrfs-snapshot@.timer"
+    mode: "0644"
+  notify: Restart snapshot services
+
+- name: Deploy snapshot cleanup script
+  ansible.builtin.copy:
+    src: btrfs-snapshot-cleanup.sh
+    dest: /usr/local/bin/btrfs-snapshot-cleanup.sh
+    mode: "0755"
+
+- name: Enable and start snapshot timers
+  ansible.builtin.systemd:
+    name: "btrfs-snapshot@{{ item }}.timer"
+    enabled: true
+    state: started
+  loop:
+    - nextcloud
+    - proxy
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true

@@ -1,0 +1,8 @@
+---
+- name: Restart snapshot services
+  ansible.builtin.systemd:
+    name: "btrfs-snapshot@{{ item }}"
+    state: restarted
+  loop:
+    - nextcloud
+    - proxy

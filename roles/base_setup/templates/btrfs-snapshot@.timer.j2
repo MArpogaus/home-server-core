@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily Btrfs snapshot timer for @%i
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target

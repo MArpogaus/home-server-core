@@ -1,0 +1,11 @@
+# VM disk image (15 GB)
+fcos.qcow2
+*.qcow2
+*.qcow2.xz
+
+# SSH-Key
+coreos_key
+coreos_key.pub
+
+# Ignition-Config (enthält SSH-Key)
+config.ign

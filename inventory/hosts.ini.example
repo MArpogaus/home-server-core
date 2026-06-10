@@ -1,0 +1,7 @@
+[coreos]
+coreos ansible_host=host.containers.internal ansible_port=2222 ansible_user=core
+
+[coreos:vars]
+ansible_ssh_private_key_file={{ ssh_key_path }}
+ansible_become_method=community.general.run0
+ansible_connection=ssh
