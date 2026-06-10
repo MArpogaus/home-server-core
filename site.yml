@@ -14,7 +14,9 @@
     - role: nextcloud_service
       vars:
         nextcloud_service_user: nextcloud
+        nextcloud_service_uid: "{{ nextcloud_uid | default(82) }}"
         nextcloud_service_home: /var/services/nextcloud
+        nextcloud_service_role_dir: "{{ playbook_dir }}/../service-nextcloud/ansible-role/nextcloud_service"
 
 - name: Deploy Bunkerweb service
   hosts: all
@@ -23,4 +25,17 @@
     - role: bunker_service
       vars:
         bunker_service_user: proxy
+        bunker_service_uid: "{{ proxy_uid | default(1001) }}"
         bunker_service_home: /var/services/proxy
+        bunker_service_role_dir: "{{ playbook_dir }}/../service-bunker/ansible-role/bunker_service"
+
+- name: Deploy Monitoring service
+  hosts: all
+  gather_facts: false
+  roles:
+    - role: monitoring_service
+      vars:
+        monitoring_service_user: monitoring
+        monitoring_service_uid: "{{ monitoring_uid | default(1002) }}"
+        monitoring_service_home: /var/services/monitoring
+        monitoring_service_role_dir: "{{ playbook_dir }}/../service-monitoring/ansible-role/monitoring_service"

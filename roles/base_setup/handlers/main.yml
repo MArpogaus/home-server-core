@@ -6,3 +6,4 @@
   loop:
     - nextcloud
     - proxy
+    - monitoring

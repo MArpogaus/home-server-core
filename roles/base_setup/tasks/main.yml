@@ -1,18 +1,25 @@
 ---
 # Ignition creates /var as Btrfs partition
-# Ansible creates subvolumes under /var/services/ using systemd-run (no sudo)
+# Ansible creates subvolumes under /var/services/
+
+- name: Ensure /var/services directory exists
+  ansible.builtin.file:
+    path: /var/services
+    state: directory
+    mode: "0755"
 
 - name: Create Btrfs subvolumes under /var/services
   ansible.builtin.command: "btrfs subvolume create /var/services/{{ item }}"
   loop:
     - nextcloud
     - proxy
+    - monitoring
     - snapshots
   args:
     creates: "/var/services/{{ item }}"
   changed_when: true
 
-- name: Create service users (non-login)
+- name: Create service users (non-login, system)
   ansible.builtin.user:
     name: "{{ item.name }}"
     uid: "{{ item.uid }}"
@@ -22,19 +29,39 @@
     system: true
   loop: "{{ base_setup_bmc_users }}"
 
+- name: Add subuid entries for rootless podman
+  ansible.builtin.lineinfile:
+    path: /etc/subuid
+    line: "{{ item.name }}:{{ item.subuid_start }}:{{ base_setup_subuid_range_size }}"
+    regexp: "^{{ item.name }}:"
+    create: true
+    mode: "0644"
+  loop: "{{ base_setup_bmc_users }}"
+
+- name: Add subgid entries for rootless podman
+  ansible.builtin.lineinfile:
+    path: /etc/subgid
+    line: "{{ item.name }}:{{ item.subuid_start }}:{{ base_setup_subuid_range_size }}"
+    regexp: "^{{ item.name }}:"
+    create: true
+    mode: "0644"
+  loop: "{{ base_setup_bmc_users }}"
+
 - name: Set subvolume ownership
   ansible.builtin.file:
     path: "/var/services/{{ item.path }}"
     owner: "{{ item.owner }}"
     group: "{{ item.owner }}"
-    recurse: true
+    state: directory
+    mode: "0750"
   loop:
     - { path: nextcloud, owner: nextcloud }
     - { path: proxy, owner: proxy }
+    - { path: monitoring, owner: monitoring }
 
-- name: Ensure systemd user directories exist
+- name: Ensure Quadlet systemd directory exists
   ansible.builtin.file:
-    path: "/var/services/{{ item.name }}/.config/systemd/user"
+    path: "/var/services/{{ item.name }}/.config/containers/systemd"
     state: directory
     owner: "{{ item.name }}"
     group: "{{ item.name }}"
@@ -49,6 +76,7 @@
   loop:
     - "/var/services/nextcloud(/.*)?"
     - "/var/services/proxy(/.*)?"
+    - "/var/services/monitoring(/.*)?"
     - "/var/services/snapshots(/.*)?"
     - "/var/services(/.*)?"
 
@@ -57,6 +85,7 @@
   loop:
     - /var/services/nextcloud
     - /var/services/proxy
+    - /var/services/monitoring
     - /var/services/snapshots
     - /var/services
   changed_when: true
@@ -89,6 +118,7 @@
   loop:
     - nextcloud
     - proxy
+    - monitoring
 
 - name: Reload systemd daemon
   ansible.builtin.systemd:
