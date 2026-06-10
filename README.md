@@ -1,76 +1,199 @@
-# ansible-base
+# SecureBlue Ansible Deployment
 
-System configuration for a Podman Quadlet server: Btrfs subvolumes, automated snapshots, SELinux policies, and user management.
+Ansible Playbooks for automating SecureBlue deployments with Fedora CoreOS.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  ansible-base (System Configuration)                │
-│                                                     │
-│  base_setup          Btrfs users, snapshots, SELinux│
-│  service_deploy      Deploy Quadlet files to users  │
-│                                                     │
-│  Services deployed:                                 │
-│    - nextcloud (service-nextcloud)                  │
-│    - proxy / bunker  (service-bunker)               │
-└─────────────────────────────────────────────────────┘
++-------------------------------------------------------------+
+|                    SecureBlue VM (KVM/QEMU)                  |
+|  +-------------------------------------------------------+  |
+|  |  Fedora CoreOS 44 -> rpm-ostree rebase -> SecureBlue |  |
+|  |  +-------------------------------------------------+ |  |
+|  |  |  Btrfs Rootfs                                   | |  |
+|  |  |  +- /var/services/nextcloud (subvolume)        | |  |
+|  |  |  +- /var/services/proxy (subvolume)            | |  |
+|  |  |  +-- /var/services/snapshots (subvolume)       | |  |
+|  |  |                                                  | |  |
+|  |  |  Service Accounts:                               | |  |
+|  |  |  +- nextcloud (UID 82)                          | |  |
+|  |  |  +-- proxy (UID 1001)                           | |  |
+|  |  |                                                  | |  |
+|  |  |  Quadlet Services (user-level systemd):         | |  |
+|  |  |  +- nextcloud-{app,cron,db,redis,web,...}       | |  |
+|  |  |  +-- bunker-{nginx,scheduler}                   | |  |
+|  |  |                                                  | |  |
+|  |  |  Privilege Escalation:                          | |  |
+|  |  |  +-- run0 + Polkit (no sudo)                    | |  |
+|  |  +-------------------------------------------------+ |  |
+|  +-------------------------------------------------------+  |
++-------------------------------------------------------------+
+```
+
+## Repository Structure
+
+```
+ansible-base/
+├── .github/workflows/
+│   └── test-secureblue-deploy.yaml  # GitHub Actions CI
+├── defaults/main.yml                # Global defaults
+├── group_vars/
+│   └── all.yml                      # Service deployment targets
+├── inventory/
+│   └── hosts.ini.example            # Host configuration (template)
+├── roles/
+│   ├── base_setup/                  # Btrfs, users, SELinux, snapshots
+│   │   ├── defaults/
+│   │   ├── files/
+│   │   ├── handlers/
+│   │   ├── tasks/
+│   │   └── templates/
+│   └── service_deploy/              # Quadlet service deployment
+│       └── tasks/
+├── secrets/
+│   └── vars.yml.example             # Private secrets (template)
+├── test/
+│   ├── config.bu                    # Butane ignition config
+│   ├── start_vm.py                  # VM launcher (Python stdlib)
+│   └── deploy.sh                    # Quick deploy script
+├── ansible.cfg                      # Ansible configuration
+├── site.yml                         # Main playbook
+└── README.md
 ```
 
 ## Quick Start
 
-1. Configure inventory:
-   ```bash
-   cp inventory/hosts.ini.example inventory/hosts.ini
-   # Edit with your server IP and user
-   ```
+### 1. Start VM (test environment)
 
-2. Install Galaxy dependencies:
-   ```bash
-   ansible-galaxy install -r requirements.yml
-   ```
+```bash
+cd test
+./deploy.sh
+```
 
-3. Run the playbook:
-   ```bash
-   ansible-playbook -i inventory/hosts.ini site.yml
-   ```
+Or manually:
 
-4. Verify:
-   ```bash
-   # Check Btrfs snapshots
-   btrfs subvolume list /snapshots
+```bash
+# Generate SSH key
+ssh-keygen -t ed25519 -f coreos_key -N ""
 
-   # Check SELinux labels
-   ls -Z /home/nextcloud
-   ls -Z /home/proxy
+# Generate Butane config
+podman run --rm -i quay.io/coreos/butane:release < config.bu > config.ign
 
-   # Check container services
-   systemctl --user list-units --type=service | grep -E '(nextcloud|bunker)'
-   podman ps
-   ```
+# Start VM
+python3 start_vm.py
+```
 
-## Roles
+### 2. Run Ansible playbook
 
-### base_setup
-- Installs podman, btrfs-progs, SELinux tools
-- Creates users (nextcloud, proxy)
-- Creates Btrfs subvolumes with SELinux labels
-- Deploys daily snapshot timers
-- Runs snapshot cleanup script (30-day retention)
+```bash
+# Configure private secrets
+cp secrets/vars.yml.example secrets/vars.yml
+# Edit secrets/vars.yml with your values
 
-### service_deploy
-- Deploys Quadlet `.container`, `.volume`, `.network` files
-- Deploys config files (nginx, php configs for Nextcloud)
-- Reloads systemd user daemon
-- Enables and starts services
+# Configure inventory
+cp inventory/hosts.ini.example inventory/hosts.ini
+# Edit inventory/hosts.ini
 
-## Variables
+# Run playbook
+ansible-playbook -i inventory/hosts.ini site.yml \
+  --extra-vars "@secrets/vars.yml"
+```
 
-See `defaults/main.yml` and `group_vars/all.yml` for configurable variables.
+## Secrets Management
 
-## Snapshot Configuration
+**IMPORTANT:** Private secrets must NOT be committed to the repository!
 
-- **Schedule:** Daily (via systemd timer)
-- **Retention:** 30 days (configurable via `btrfs_snapshot_retention_days`)
-- **Location:** `/snapshots/<volume>/<YYYY-MM-DD>/`
-- **Type:** Read-only snapshots
+### Required secrets:
+
+```yaml
+# secrets/vars.yml
+ssh_key_path: "../test/coreos_key"
+ghcr_username: "your-username"
+ghcr_token: "your-token"
+domain: "cloud.your-domain.de"
+```
+
+### .gitignore protects against accidental commits:
+
+```
+secrets/vars.yml
+inventory/hosts.ini
+*.key
+*.pub
+```
+
+## CI/CD
+
+GitHub Actions workflow tests:
+- VM boot with QEMU
+- Ansible playbook execution
+- Btrfs subvolume creation
+- Service account setup
+- SELinux contexts
+- Snapshot timers
+- Quadlet file deployment
+
+Workflow runs automatically on `push` to `dev` or `PR`.
+
+## Requirements
+
+### Local (for development)
+
+- Podman (for Butane)
+- Python 3.10+
+- Ansible Core 2.21+
+- community.general 13.0.1+
+
+### Target system
+
+- Fedora CoreOS 44.20260510.3.1 or newer
+- SecureBlue `securecore-main-hardened`
+- KVM/QEMU virtualization
+- 4GB+ RAM, 20GB+ storage
+
+## Configuration
+
+### Butane Ignition (`test/config.bu`)
+
+- SSH key injection
+- Polkit rule for `run0`
+- Network configuration (NAT + port forwarding)
+- Btrfs rootfs
+
+### Ansible variables
+
+See `defaults/main.yml` and `group_vars/all.yml`.
+
+## Validation
+
+```bash
+# Btrfs subvolumes
+systemd-run --wait --unit=tmp-check /usr/bin/btrfs subvolume list /var/services
+
+# Service accounts
+getent passwd nextcloud proxy
+
+# SELinux contexts
+ls -Zd /var/services/nextcloud /var/services/proxy
+
+# Snapshot timers
+systemctl list-timers --all | grep btrfs-snapshot
+
+# Quadlet files
+ls /var/services/nextcloud/.config/systemd/user/*.container
+```
+
+## Troubleshooting
+
+See [Agent.md](../Agent.md) for detailed troubleshooting.
+
+## References
+
+- [REQUIREMENTS.md](../REQUIREMENTS.md) - Project requirements
+- [service-nextcloud](../service-nextcloud/) - Nextcloud container
+- [service-bunker](../service-bunker/) - Bunkerweb container
+- [deployment-private](../deployment-private/) - Private deployment config
+
+## License
+
+Proprietary - Internal use only.
