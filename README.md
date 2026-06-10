@@ -36,20 +36,15 @@ Ansible Playbooks for automating SecureBlue deployments with Fedora CoreOS.
 ansible-base/
 ├── .github/workflows/
 │   └── test-secureblue-deploy.yaml  # GitHub Actions CI
-├── defaults/main.yml                # Global defaults
-├── group_vars/
-│   └── all.yml                      # Service deployment targets
 ├── inventory/
 │   └── hosts.ini.example            # Host configuration (template)
 ├── roles/
-│   ├── base_setup/                  # Btrfs, users, SELinux, snapshots
-│   │   ├── defaults/
-│   │   ├── files/
-│   │   ├── handlers/
-│   │   ├── tasks/
-│   │   └── templates/
-│   └── service_deploy/              # Quadlet service deployment
-│       └── tasks/
+│   └── base_setup/                  # Btrfs, users, SELinux, snapshots
+│       ├── defaults/
+│       ├── files/
+│       ├── handlers/
+│       ├── tasks/
+│       └── templates/
 ├── secrets/
 │   └── vars.yml.example             # Private secrets (template)
 ├── test/
@@ -59,6 +54,10 @@ ansible-base/
 ├── ansible.cfg                      # Ansible configuration
 ├── site.yml                         # Main playbook
 └── README.md
+
+External roles (in separate repos):
+├── service-nextcloud/ansible-role/nextcloud_service/
+└── service-bunker/ansible-role/bunker_service/
 ```
 
 ## Quick Start
@@ -122,6 +121,30 @@ inventory/hosts.ini
 *.pub
 ```
 
+## Service Roles
+
+Service-specific Ansible roles are in separate repositories:
+
+- **service-nextcloud** - Nextcloud Quadlet deployment
+- **service-bunker** - Bunkerweb Quadlet deployment
+
+Roles are automatically included via `ansible.cfg` roles_path.
+
+### Usage
+
+```yaml
+# site.yml
+- hosts: all
+  roles:
+    - base_setup
+    - nextcloud_service
+    - bunker_service
+```
+
+See respective repositories for role documentation:
+- `../service-nextcloud/ansible-role/README.md`
+- `../service-bunker/ansible-role/README.md`
+
 ## CI/CD
 
 GitHub Actions workflow tests:
@@ -162,7 +185,7 @@ Workflow runs automatically on `push` to `dev` or `PR`.
 
 ### Ansible variables
 
-See `defaults/main.yml` and `group_vars/all.yml`.
+All variables are defined in role defaults or passed via playbook.
 
 ## Validation
 
@@ -196,4 +219,4 @@ See [Agent.md](../Agent.md) for detailed troubleshooting.
 
 ## License
 
-Proprietary - Internal use only.
+MIT - See LICENSE file
