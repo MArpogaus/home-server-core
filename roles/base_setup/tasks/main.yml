@@ -149,6 +149,20 @@
   become_user: "{{ item.name }}"
   loop: "{{ base_setup_bmc_users }}"
 
+- name: Allow unprivileged users to bind to ports >= 80 (for rootless Podman)
+  ansible.builtin.copy:
+    content: |
+      # Allow rootless Podman to publish ports >= 80
+      net.ipv4.ip_unprivileged_port_start=80
+    dest: /etc/sysctl.d/90-unprivileged-port-start.conf
+    mode: "0644"
+  register: sysctl_config
+
+- name: Apply sysctl setting immediately
+  ansible.builtin.command: sysctl -w net.ipv4.ip_unprivileged_port_start=80
+  when: sysctl_config.changed
+  changed_when: true
+
 - name: Reload systemd daemon
   ansible.builtin.systemd:
     daemon_reload: true
