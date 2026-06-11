@@ -150,7 +150,7 @@ test/*.pub
 
 # VM artifacts
 *.qcow2
-*.qcow2.xz
+*.qcow2.*
 fcos.qcow2
 
 # Ansible
