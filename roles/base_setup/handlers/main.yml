@@ -7,3 +7,7 @@
     - nextcloud
     - proxy
     - monitoring
+
+- name: Apply sysctl setting
+  ansible.builtin.command: sysctl -w net.ipv4.ip_unprivileged_port_start=80
+  changed_when: true

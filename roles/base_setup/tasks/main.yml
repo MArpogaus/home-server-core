@@ -156,12 +156,8 @@
       net.ipv4.ip_unprivileged_port_start=80
     dest: /etc/sysctl.d/90-unprivileged-port-start.conf
     mode: "0644"
-  register: sysctl_config
-
-- name: Apply sysctl setting immediately
-  ansible.builtin.command: sysctl -w net.ipv4.ip_unprivileged_port_start=80
-  when: sysctl_config.changed
-  changed_when: true
+  register: base_setup_sysctl_config
+  notify: Apply sysctl setting
 
 - name: Reload systemd daemon
   ansible.builtin.systemd:
