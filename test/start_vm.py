@@ -21,6 +21,7 @@ import urllib.request
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 FCOS_VERSION = "44.20260510.3.1"
 DISK_FILE = os.path.join(TEST_DIR, "fcos.qcow2")
+DISK_SIZE = "20G"  # grown after initial download
 IGNITION_FILE = os.path.join(TEST_DIR, "config.ign")
 BUTANE_CONFIG = os.path.join(TEST_DIR, "config.bu")
 SSH_KEY = os.path.join(TEST_DIR, "coreos_key")
@@ -73,6 +74,16 @@ if not os.path.exists(DISK_FILE):
     ok(f"Disk: {os.path.basename(DISK_FILE)} ({os.path.getsize(DISK_FILE)//1024//1024} MB)")
 else:
     ok(f"Disk: {os.path.basename(DISK_FILE)} ({os.path.getsize(DISK_FILE)//1024//1024} MB)")
+
+# Resize disk to DISK_SIZE if it hasn't been grown yet
+current_size = os.path.getsize(DISK_FILE)
+target_bytes = int(DISK_SIZE[:-1]) * 1024**3
+if current_size < target_bytes:
+    ok(f"Resize disk to {DISK_SIZE}...")
+    subprocess.run(["qemu-img", "resize", DISK_FILE, DISK_SIZE], check=True)
+    ok(f"Disk now: {os.path.getsize(DISK_FILE)//1024//1024} MB")
+else:
+    ok(f"Disk already {DISK_SIZE} (or larger)")
 
 # ==========================
 # Generate Ignition config via Butane
