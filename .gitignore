@@ -130,7 +130,7 @@ $RECYCLE.BIN/
 
 # Logs
 *.log
-.env*
+.env
 
 # Inventory (contains host-specific details)
 inventory/hosts.ini
