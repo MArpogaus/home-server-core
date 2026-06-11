@@ -5,9 +5,9 @@ passwd:
     - name: core
       groups:
         - wheel
-      password_hash: $y$j9T$mefBCJbp/a49aSkTT4hpE1$6BXtrIuV8856t4A9r/R1GW4aR9eKXxsmB8FXt56Hx70
+      password_hash: "${PASSWORD_HASH}"
       ssh_authorized_keys:
-        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAOsOtZQXtJccysRp30N58HDX2YCxIWuRjHK3fyX8h2p coreos-ansible
+        - "${SSH_PUBLIC_KEY}"
 storage:
   filesystems:
     - device: /dev/disk/by-partlabel/root
@@ -50,7 +50,6 @@ storage:
               }
             }
           }
-    # Polkit rule: allow wheel group to use run0 without password (Ansible automation)
     - path: /etc/polkit-1/rules.d/60-run0-fast-user-auth.rules
       mode: 0644
       contents:
@@ -68,7 +67,6 @@ storage:
           #!/usr/bin/env bash
           set -e
 
-          # FCOS phase: sudo is available (will be removed by SecureBlue)
           sudo systemctl disable --now zincati.service 2>/dev/null || true
           sudo systemctl stop rpm-ostreed-automatic.timer rpm-ostreed-automatic.service 2>/dev/null || true
 
@@ -80,10 +78,7 @@ storage:
             echo "Error: Secureblue installation failed." >&2
             exit "$status"
           else
-            # SecureBlue removes sudo — but polkit rule (written earlier) remains
-            # Copy default policy from new root
             sudo cp /usr/etc/containers/policy.json /etc/containers/policy.json
-            # Merge marpogaus registry policy
             POLICY_FILE="/etc/containers/policy.json"
             jq --arg image_registry "ghcr.io/marpogaus" \
                 '.transports.docker |=

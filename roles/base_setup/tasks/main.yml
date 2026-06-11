@@ -120,6 +120,37 @@
     - proxy
     - monitoring
 
+- name: Enable linger for service users (persistent systemd user managers)
+  ansible.builtin.command: "loginctl enable-linger {{ item.name }}"
+  loop: "{{ base_setup_bmc_users }}"
+  changed_when: true
+
+- name: Start systemd user managers for service users (activate user bus)
+  ansible.builtin.systemd:
+    name: "user@{{ item.uid }}.service"
+    state: started
+    scope: system
+  loop: "{{ base_setup_bmc_users }}"
+
+- name: Create shared Podman network for each service user
+  ansible.builtin.command:
+    cmd: podman network create --driver bridge --subnet 10.89.0.0/24 shared-network
+  become: true
+  become_user: "{{ item.name }}"
+  loop: "{{ base_setup_bmc_users }}"
+  changed_when: false
+  failed_when: false
+
+- name: Enable podman auto-update timer for service users
+  ansible.builtin.systemd:
+    name: podman-auto-update.timer
+    enabled: true
+    state: started
+    scope: user
+  become: true
+  become_user: "{{ item.name }}"
+  loop: "{{ base_setup_bmc_users }}"
+
 - name: Reload systemd daemon
   ansible.builtin.systemd:
     daemon_reload: true

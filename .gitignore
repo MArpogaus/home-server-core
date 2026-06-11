@@ -143,6 +143,7 @@ id_rsa*
 id_ed25519*
 
 # Ignition/Butane (may contain embedded keys)
+test/config.bu
 test/config.ign
 test/*.key
 test/*.pub
