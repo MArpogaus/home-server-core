@@ -1,0 +1,6 @@
+[Unit]
+Description=Reboot if rpm-ostree has a staged deployment
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/auto-reboot-staged.sh

@@ -139,15 +139,57 @@
   changed_when: false
   failed_when: false
 
-- name: Enable podman auto-update timer for service users
+- name: Deploy auto-reboot script for staged rpm-ostree deployments
+  ansible.builtin.copy:
+    src: auto-reboot-staged.sh
+    dest: /usr/local/bin/auto-reboot-staged.sh
+    mode: "0755"
+
+- name: Deploy auto-reboot systemd service and timer
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop:
+    - auto-reboot-staged.service
+    - auto-reboot-staged.timer
+
+- name: Enable and start auto-reboot timer
   ansible.builtin.systemd:
-    name: podman-auto-update.timer
+    name: auto-reboot-staged.timer
     enabled: true
     state: started
-    scope: user
-  become: true
-  become_user: "{{ item.name }}"
+
+- name: Enable podman auto-update timer for service users
+  ansible.builtin.command:
+    cmd: "machinectl shell {{ item.name }}@ /usr/bin/systemctl --user enable --now podman-auto-update.timer"
   loop: "{{ base_setup_bmc_users }}"
+  register: base_setup_auto_update_enable
+  changed_when: "'Created symlink' in base_setup_auto_update_enable.stdout"
+  failed_when: false
+
+- name: Ensure firewalld is running
+  ansible.builtin.systemd:
+    name: firewalld
+    state: started
+    enabled: true
+
+- name: Configure firewall to allow SSH, HTTP, and HTTPS only
+  ansible.builtin.command:
+    cmd: "firewall-cmd --permanent --add-service={{ item }}"
+  loop:
+    - ssh
+    - http
+    - https
+  register: base_setup_firewall_add
+  changed_when: "'already' not in base_setup_firewall_add.stderr"
+  failed_when: false
+
+- name: Reload firewall to apply permanent rules
+  ansible.builtin.command:
+    cmd: firewall-cmd --reload
+  changed_when: true
+  failed_when: false
 
 - name: Allow unprivileged users to bind to ports >= 80 (for rootless Podman)
   ansible.builtin.copy:
