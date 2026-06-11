@@ -86,8 +86,6 @@
     - /var/services/nextcloud
     - /var/services/proxy
     - /var/services/monitoring
-    - /var/services/snapshots
-    - /var/services
   changed_when: true
 
 - name: Deploy snapshot service template
