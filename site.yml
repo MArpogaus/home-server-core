@@ -33,7 +33,6 @@
         - "{{ playbook_dir }}/../service-nextcloud/quadlets/nc-app-logs.volume"
         - "{{ playbook_dir }}/../service-nextcloud/quadlets/nc-db.volume"
         - "{{ playbook_dir }}/../service-nextcloud/quadlets/nc-web-cache.volume"
-        - "{{ playbook_dir }}/../service-nextcloud/quadlets/nextcloud-data.volume"
         - "{{ playbook_dir }}/../service-nextcloud/quadlets/shared-network.network"
         - "{{ playbook_dir }}/../service-nextcloud/quadlets/nc.pod"
         - "{{ playbook_dir }}/../service-nextcloud/quadlets/nc-app-data.volume"
