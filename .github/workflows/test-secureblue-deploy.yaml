@@ -75,7 +75,7 @@ jobs:
         run: |
           cd ansible-base
           pip install ansible-core==2.21 community.general==13.0.1
-          ansible-playbook -i ../test/hosts.ini site.yml \
+          ansible-playbook -i test/hosts.ini site.yml \
             --extra-vars "ansible_ssh_private_key_file=../test/coreos_key" \
             --extra-vars "ansible_user=core" \
             --extra-vars "ansible_port=2222" \

@@ -52,6 +52,8 @@ ansible-base/
   ansible.cfg                 # Ansible config (run0, roles_path, SSH)
   site.yml                    # Main playbook
   .pre-commit-config.yaml     # Pre-commit hooks (yaml, lint, whitespace)
+  scripts/
+    ansible-syntax-check.sh  # Runs ansible-lint on playbook
   roles/
     base_setup/
       defaults/main.yml       # Variable defaults
