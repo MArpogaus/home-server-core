@@ -64,16 +64,21 @@
         group: nextcloud
         mode: "0755"
 
-    - name: Deploy Nextcloud config files
-      ansible.builtin.copy:
-        src: "{{ item }}"
-        dest: "/var/services/nextcloud/.config/containers/systemd/configs/"
+    - name: Template Nextcloud nginx config
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../service-nextcloud/quadlets/configs/nginx.conf.j2"
+        dest: "/var/services/nextcloud/.config/containers/systemd/configs/nginx.conf"
         owner: nextcloud
         group: nextcloud
         mode: "0644"
-      loop:
-        - "{{ playbook_dir }}/../service-nextcloud/quadlets/configs/nginx.conf"
-        - "{{ playbook_dir }}/../service-nextcloud/quadlets/configs/promtail-nc.yaml"
+
+    - name: Deploy Nextcloud promtail config
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../service-nextcloud/quadlets/configs/promtail-nc.yaml"
+        dest: "/var/services/nextcloud/.config/containers/systemd/configs/promtail-nc.yaml"
+        owner: nextcloud
+        group: nextcloud
+        mode: "0644"
 
     - name: Template Nextcloud environment file (secrets)
       ansible.builtin.template:
