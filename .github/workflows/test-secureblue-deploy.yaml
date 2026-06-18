@@ -8,8 +8,8 @@ on:
 
 env:
   FCOS_VERSION: 44.20260510.3.1
-  FCOS_IMAGE: "fedora-coreos-${{ env.FCOS_VERSION }}-qemu.x86_64.qcow2"
-  FCOS_URL: "https://builds.coreos.fedoraproject.org/pub/releases/${{ env.FCOS_VERSION }}/qemu/${{ env.FCOS_IMAGE }}"
+  FCOS_IMAGE: "fedora-coreos-44.20260510.3.1-qemu.x86_64.qcow2"
+  FCOS_URL: "https://builds.coreos.fedoraproject.org/pub/releases/44.20260510.3.1/qemu/fedora-coreos-44.20260510.3.1-qemu.x86_64.qcow2"
 
 jobs:
   test-deployment:
