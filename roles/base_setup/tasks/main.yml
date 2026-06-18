@@ -88,6 +88,18 @@
     - /var/services/monitoring
   changed_when: true
 
+- name: Disable SecureBlue harden_userns module (enables rootless Podman)
+  ansible.builtin.command: semodule -d harden_userns
+  register: base_setup_disable_userns
+  changed_when: base_setup_disable_userns.rc == 0
+  failed_when: false
+
+- name: Disable SecureBlue harden_container_userns module (enables rootless Podman)
+  ansible.builtin.command: semodule -d harden_container_userns
+  register: base_setup_disable_container_userns
+  changed_when: base_setup_disable_container_userns.rc == 0
+  failed_when: false
+
 - name: Deploy snapshot service template
   ansible.builtin.template:
     src: btrfs-snapshot@.service.j2
