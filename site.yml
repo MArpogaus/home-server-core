@@ -160,7 +160,6 @@
         - "{{ playbook_dir }}/../service-monitoring/quadlets/monitoring-loki.container"
         - "{{ playbook_dir }}/../service-monitoring/quadlets/monitoring-node-exporter.container"
         - "{{ playbook_dir }}/../service-monitoring/quadlets/monitoring-prometheus.container"
-        - "{{ playbook_dir }}/../service-monitoring/quadlets/monitoring-promtail.container"
         - "{{ playbook_dir }}/../service-monitoring/quadlets/grafana-data.volume"
         - "{{ playbook_dir }}/../service-monitoring/quadlets/loki-data.volume"
         - "{{ playbook_dir }}/../service-monitoring/quadlets/prometheus-data.volume"
@@ -192,7 +191,6 @@
         - "{{ playbook_dir }}/../service-monitoring/quadlets/configs/loki.yaml"
         - "{{ playbook_dir }}/../service-monitoring/quadlets/configs/prometheus.yaml"
         - "{{ playbook_dir }}/../service-monitoring/quadlets/configs/prometheus-rules.yaml"
-        - "{{ playbook_dir }}/../service-monitoring/quadlets/configs/promtail.yaml"
         - "{{ playbook_dir }}/../service-monitoring/quadlets/configs/grafana-datasources.yaml"
         - "{{ playbook_dir }}/../service-monitoring/quadlets/configs/grafana-dashboards.yaml"
 
