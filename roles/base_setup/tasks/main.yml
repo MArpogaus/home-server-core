@@ -140,6 +140,15 @@
     scope: system
   loop: "{{ base_setup_services }}"
 
+- name: Create shared Podman network for each service user
+  ansible.builtin.command:
+    cmd: "podman network create --driver bridge --subnet 10.89.0.0/24 shared-network"
+  become: true
+  become_user: "{{ item.name }}"
+  loop: "{{ base_setup_services }}"
+  changed_when: false
+  failed_when: false
+
 - name: Deploy auto-reboot script for staged rpm-ostree deployments
   ansible.builtin.copy:
     src: auto-reboot-staged.sh
