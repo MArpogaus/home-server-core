@@ -3,10 +3,7 @@
   ansible.builtin.systemd:
     name: "btrfs-snapshot@{{ item }}"
     state: restarted
-  loop:
-    - nextcloud
-    - proxy
-    - monitoring
+  loop: "{{ base_setup_services | map(attribute='name') | list }}"
 
 - name: Apply sysctl setting
   ansible.builtin.command: sysctl -w net.ipv4.ip_unprivileged_port_start=80

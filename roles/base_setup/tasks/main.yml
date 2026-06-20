@@ -6,58 +6,57 @@
   ansible.builtin.file:
     path: /var/services
     state: directory
-    mode: "0755"
+    mode: '0755'
 
-- name: Create Btrfs subvolumes under /var/services
-  ansible.builtin.command: "btrfs subvolume create /var/services/{{ item }}"
-  loop:
-    - nextcloud
-    - proxy
-    - monitoring
-    - snapshots
-  args:
-    creates: "/var/services/{{ item }}"
+- name: Create Btrfs subvolumes for each service
+  ansible.builtin.command:
+    cmd: "btrfs subvolume create /var/services/{{ item.name }}"
+    creates: "/var/services/{{ item.name }}"
+  loop: "{{ base_setup_services }}"
+  changed_when: true
+
+- name: Create Btrfs subvolume for snapshots
+  ansible.builtin.command:
+    cmd: "btrfs subvolume create {{ base_setup_btrfs_snapshot_dir }}"
+    creates: "{{ base_setup_btrfs_snapshot_dir }}"
   changed_when: true
 
 - name: Create service users (non-login, system)
   ansible.builtin.user:
     name: "{{ item.name }}"
     uid: "{{ item.uid }}"
-    home: "{{ item.home }}"
+    home: "/var/services/{{ item.name }}"
     shell: /usr/sbin/nologin
     createhome: false
     system: true
-  loop: "{{ base_setup_bmc_users }}"
+  loop: "{{ base_setup_services }}"
 
 - name: Add subuid entries for rootless podman
   ansible.builtin.lineinfile:
     path: /etc/subuid
-    line: "{{ item.name }}:{{ item.subuid_start }}:{{ base_setup_subuid_range_size }}"
-    regexp: "^{{ item.name }}:"
+    line: "{{ item.0.name }}:{{ 100000 + item.1 * (base_setup_subuid_range_size | int) }}:{{ base_setup_subuid_range_size }}"
+    regexp: "^{{ item.0.name }}:"
     create: true
-    mode: "0644"
-  loop: "{{ base_setup_bmc_users }}"
+    mode: '0644'
+  loop: "{{ base_setup_services | zip(range(base_setup_services | length)) | list }}"
 
 - name: Add subgid entries for rootless podman
   ansible.builtin.lineinfile:
     path: /etc/subgid
-    line: "{{ item.name }}:{{ item.subuid_start }}:{{ base_setup_subuid_range_size }}"
-    regexp: "^{{ item.name }}:"
+    line: "{{ item.0.name }}:{{ 100000 + item.1 * (base_setup_subuid_range_size | int) }}:{{ base_setup_subuid_range_size }}"
+    regexp: "^{{ item.0.name }}:"
     create: true
-    mode: "0644"
-  loop: "{{ base_setup_bmc_users }}"
+    mode: '0644'
+  loop: "{{ base_setup_services | zip(range(base_setup_services | length)) | list }}"
 
 - name: Set subvolume ownership
   ansible.builtin.file:
-    path: "/var/services/{{ item.path }}"
-    owner: "{{ item.owner }}"
-    group: "{{ item.owner }}"
+    path: "/var/services/{{ item.name }}"
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
     state: directory
-    mode: "0750"
-  loop:
-    - { path: nextcloud, owner: nextcloud }
-    - { path: proxy, owner: proxy }
-    - { path: monitoring, owner: monitoring }
+    mode: '0750'
+  loop: "{{ base_setup_services }}"
 
 - name: Ensure Quadlet systemd directory exists
   ansible.builtin.file:
@@ -65,27 +64,29 @@
     state: directory
     owner: "{{ item.name }}"
     group: "{{ item.name }}"
-    mode: "0755"
-  loop: "{{ base_setup_bmc_users }}"
+    mode: '0755'
+  loop: "{{ base_setup_services }}"
+
+- name: Build SELinux file context targets
+  ansible.builtin.set_fact:
+    base_setup_selinux_targets: >-
+      {{
+        ['/var/services/snapshots(/.*)?', '/var/services(/.*)?']
+        + (base_setup_services | map(attribute='name')
+           | map('regex_replace', '^(.*)$', '/var/services/\\1(/.*)?') | list)
+      }}
 
 - name: Install SELinux file context rules
   community.general.sefcontext:
     target: "{{ item }}"
     setype: container_file_t
     state: present
-  loop:
-    - "/var/services/nextcloud(/.*)?"
-    - "/var/services/proxy(/.*)?"
-    - "/var/services/monitoring(/.*)?"
-    - "/var/services/snapshots(/.*)?"
-    - "/var/services(/.*)?"
+  loop: "{{ base_setup_selinux_targets }}"
 
 - name: Apply SELinux labels
-  ansible.builtin.command: "restorecon -Rv {{ item }}"
-  loop:
-    - /var/services/nextcloud
-    - /var/services/proxy
-    - /var/services/monitoring
+  ansible.builtin.command:
+    cmd: "restorecon -Rv /var/services/{{ item.name }}"
+  loop: "{{ base_setup_services }}"
   changed_when: true
 
 - name: Disable SecureBlue harden_userns module (enables rootless Podman)
@@ -103,36 +104,33 @@
 - name: Deploy snapshot service template
   ansible.builtin.template:
     src: btrfs-snapshot@.service.j2
-    dest: "/etc/systemd/system/btrfs-snapshot@.service"
-    mode: "0644"
+    dest: /etc/systemd/system/btrfs-snapshot@.service
+    mode: '0644'
   notify: Restart snapshot services
 
 - name: Deploy snapshot timer template
   ansible.builtin.template:
     src: btrfs-snapshot@.timer.j2
-    dest: "/etc/systemd/system/btrfs-snapshot@.timer"
-    mode: "0644"
+    dest: /etc/systemd/system/btrfs-snapshot@.timer
+    mode: '0644'
   notify: Restart snapshot services
 
 - name: Deploy snapshot cleanup script
   ansible.builtin.copy:
     src: btrfs-snapshot-cleanup.sh
     dest: /usr/local/bin/btrfs-snapshot-cleanup.sh
-    mode: "0755"
+    mode: '0755'
 
-- name: Enable and start snapshot timers
+- name: Enable and start snapshot timers for each service
   ansible.builtin.systemd:
-    name: "btrfs-snapshot@{{ item }}.timer"
+    name: "btrfs-snapshot@{{ item.name }}.timer"
     enabled: true
     state: started
-  loop:
-    - nextcloud
-    - proxy
-    - monitoring
+  loop: "{{ base_setup_services }}"
 
 - name: Enable linger for service users (persistent systemd user managers)
   ansible.builtin.command: "loginctl enable-linger {{ item.name }}"
-  loop: "{{ base_setup_bmc_users }}"
+  loop: "{{ base_setup_services }}"
   changed_when: true
 
 - name: Start systemd user managers for service users (activate user bus)
@@ -140,28 +138,19 @@
     name: "user@{{ item.uid }}.service"
     state: started
     scope: system
-  loop: "{{ base_setup_bmc_users }}"
-
-- name: Create shared Podman network for each service user
-  ansible.builtin.command:
-    cmd: podman network create --driver bridge --subnet 10.89.0.0/24 shared-network
-  become: true
-  become_user: "{{ item.name }}"
-  loop: "{{ base_setup_bmc_users }}"
-  changed_when: false
-  failed_when: false
+  loop: "{{ base_setup_services }}"
 
 - name: Deploy auto-reboot script for staged rpm-ostree deployments
   ansible.builtin.copy:
     src: auto-reboot-staged.sh
     dest: /usr/local/bin/auto-reboot-staged.sh
-    mode: "0755"
+    mode: '0755'
 
 - name: Deploy auto-reboot systemd service and timer
   ansible.builtin.template:
     src: "{{ item }}.j2"
     dest: "/etc/systemd/system/{{ item }}"
-    mode: "0644"
+    mode: '0644'
   loop:
     - auto-reboot-staged.service
     - auto-reboot-staged.timer
@@ -175,7 +164,7 @@
 - name: Enable podman auto-update timer for service users
   ansible.builtin.command:
     cmd: "machinectl shell {{ item.name }}@ /usr/bin/systemctl --user enable --now podman-auto-update.timer"
-  loop: "{{ base_setup_bmc_users }}"
+  loop: "{{ base_setup_services }}"
   register: base_setup_auto_update_enable
   changed_when: "'Created symlink' in base_setup_auto_update_enable.stdout"
   failed_when: false
@@ -209,7 +198,7 @@
       # Allow rootless Podman to publish ports >= 80
       net.ipv4.ip_unprivileged_port_start=80
     dest: /etc/sysctl.d/90-unprivileged-port-start.conf
-    mode: "0644"
+    mode: '0644'
   register: base_setup_sysctl_config
   notify: Apply sysctl setting
 
