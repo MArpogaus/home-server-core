@@ -2,18 +2,23 @@
 # Subuid/subgid range size for rootless podman
 base_setup_subuid_range_size: 65536
 
-# Service definitions — each must have name and uid.
+# Service definitions — each must have name, uid, and role.
 # home, repo_path, subuid_start are computed from name/index.
 # Override uid per service with e.g. nextcloud_uid in secrets.
 base_setup_services:
   - name: nextcloud
     uid: "{{ nextcloud_uid | default(82) }}"
+    role: nextcloud_service
+    repo: nextcloud
   - name: proxy
     uid: "{{ proxy_uid | default(1001) }}"
+    role: bunker_service
+    repo: bunker
   - name: monitoring
     uid: "{{ monitoring_uid | default(1002) }}"
+    role: monitoring_service
+    repo: monitoring
 
-# Path prefix for service repos (used to compute repo_path, override in site.yml)
 # Path prefix for service repos (services are at <path>/service-<name>)
 # Default: .. (sibling repos named service-<name>)
 # To organize under a services/ dir: ../services

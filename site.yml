@@ -9,23 +9,29 @@
     base_setup_services:
       - name: nextcloud
         uid: "{{ nextcloud_uid | default(82) }}"
+        role: nextcloud_service
+        repo: nextcloud
       - name: proxy
         uid: "{{ proxy_uid | default(1001) }}"
+        role: bunker_service
+        repo: bunker
       - name: monitoring
         uid: "{{ monitoring_uid | default(1002) }}"
+        role: monitoring_service
+        repo: monitoring
     base_setup_services_path: ..
   roles:
     - base_setup
   post_tasks:
     - name: Deploy each service role
       ansible.builtin.include_role:
-        name: "{{ item.name }}_service"
+        name: "{{ item.role }}"
       vars:
         service_name: "{{ item.name }}"
         service_user: "{{ item.name }}"
         service_uid: "{{ item.uid }}"
         service_home: "/var/services/{{ item.name }}"
-        service_repo: "{{ base_setup_services_path }}/service-{{ item.name }}"
+        service_repo: "{{ base_setup_services_path }}/service-{{ item.repo }}"
       loop: "{{ base_setup_services }}"
 
     - name: Reload systemd user daemons for all service users
