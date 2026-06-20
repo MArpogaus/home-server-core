@@ -14,7 +14,10 @@ base_setup_services:
     uid: "{{ monitoring_uid | default(1002) }}"
 
 # Path prefix for service repos (used to compute repo_path, override in site.yml)
-base_setup_services_path: ../services
+# Path prefix for service repos (services are at <path>/service-<name>)
+# Default: .. (sibling repos named service-<name>)
+# To organize under a services/ dir: ../services
+base_setup_services_path: ..
 
 # Snapshot settings
 base_setup_btrfs_snapshot_dir: /var/services/snapshots
