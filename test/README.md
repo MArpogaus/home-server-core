@@ -23,7 +23,6 @@ systemctl --user list-unit-files | grep nextcloud
 | `config.bu` | Butane-Konfiguration (YAML) für Fedora CoreOS |
 | `config.ign` | Generierte Ignition-Konfiguration (JSON) — wird automatisch aus `config.bu` |
 | `deploy.sh` | Spielt ansible-base `site.yml` gegen die VM |
-| `marpogaus.pub` | GHCR-Signing-Key (cosign.pub) |
 
 ## Butane-Konfiguration
 

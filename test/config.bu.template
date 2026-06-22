@@ -23,13 +23,13 @@ storage:
           MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEdruKsOhUkgdd0lNDHNBymE2Wyb/p
           GVnx59QbNoGFbImqZLRVt6uQnO9MfiHU9IZiJl9aNetfAqDsgsltAUQnXQ==
           -----END PUBLIC KEY-----
-    - path: /etc/pki/containers/marpogaus.pub
+    - path: /etc/pki/containers/marpogaus-cosign.pub
       mode: 0644
       contents:
         inline: |
           -----BEGIN PUBLIC KEY-----
-          MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE54diWpeKbUOvhesc4Oe5XOB9VHB
-          bCvOPDIJzZz0XNJsln4vVsWhIMU+GIM20/4ohFk0rNx35l41G8+4vdaAQ==
+          MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE54diWpeKbUOvhecp64Oe5XOB9VHX
+          bCvOPDIIzZz0XNJsln4vVsWiHUMU+GIM20/4ohFk0rNx35l41G8+4vdhAQ==
           -----END PUBLIC KEY-----
     - path: /etc/containers/policy.json
       mode: 0644
@@ -50,6 +50,13 @@ storage:
               }
             }
           }
+    - path: /etc/containers/registries.d/ghcr.io-marpogaus.yaml
+      mode: 0644
+      contents:
+        inline: |
+          docker:
+            ghcr.io/marpogaus:
+              use-sigstore-attachments: true
     - path: /etc/polkit-1/rules.d/60-run0-fast-user-auth.rules
       mode: 0644
       contents:
@@ -85,7 +92,7 @@ storage:
                 { $image_registry: [
                     {
                         "type": "sigstoreSigned",
-                        "keyPath": "/etc/pki/containers/marpogaus.pub",
+                        "keyPath": "/etc/pki/containers/marpogaus-cosign.pub",
                         "signedIdentity": {
                             "type": "matchRepository"
                         }
