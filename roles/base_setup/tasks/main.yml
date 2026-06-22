@@ -101,6 +101,24 @@
   changed_when: base_setup_disable_container_userns.rc == 0
   failed_when: false
 
+- name: Ensure containers config directory exists for each service user
+  ansible.builtin.file:
+    path: "/var/services/{{ item.name }}/.config/containers"
+    state: directory
+    owner: "{{ item.uid }}"
+    group: "{{ item.uid }}"
+    mode: '0755'
+  loop: "{{ base_setup_services }}"
+
+- name: Deploy sigstore config for ghcr.io/marpogaus (cosign signature lookup)
+  ansible.builtin.copy:
+    dest: /etc/containers/registries.d/ghcr.io-marpogaus.yaml
+    content: |
+      docker:
+        ghcr.io/marpogaus:
+          use-sigstore-attachments: true
+    mode: '0644'
+
 - name: Deploy snapshot service template
   ansible.builtin.template:
     src: btrfs-snapshot@.service.j2
