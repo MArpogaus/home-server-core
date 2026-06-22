@@ -100,6 +100,18 @@ storage:
                 ] } + .' "${POLICY_FILE}" > POLICY.tmp
             sudo cp POLICY.tmp /etc/containers/policy.json
             sudo rm POLICY.tmp
+
+            # Write post-reboot script to disable SELinux userns module (SecureBlue-specific)
+            cat > /var/home/core/disable-userns.sh << 'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+ujust set-container-userns on
+sed -i '/disable-userns.sh/d' /var/home/core/.bash_profile
+rm -f /var/home/core/disable-userns.sh
+SCRIPT
+            chmod 755 /var/home/core/disable-userns.sh
+            echo '/var/home/core/disable-userns.sh' >> /var/home/core/.bash_profile
+
             sudo sed -i -e '/\/opt\/install_secureblue.sh/d' /var/home/core/.bash_profile
             sudo rm -f /opt/install_secureblue.sh /etc/pki/containers/secureblue-2025.pub
             echo 'Rebooting...'
