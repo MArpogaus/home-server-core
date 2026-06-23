@@ -34,20 +34,20 @@
 - name: Add subuid entries for rootless podman
   ansible.builtin.lineinfile:
     path: /etc/subuid
-    line: "{{ item.0.name }}:{{ 100000 + item.1 * (base_setup_subuid_range_size | int) }}:{{ base_setup_subuid_range_size }}"
-    regexp: "^{{ item.0.name }}:"
+    line: "{{ item.name }}:{{ hash(item.name) | int(0, 16) % 10000 * base_setup_subuid_range_size + 100000 }}:{{ base_setup_subuid_range_size }}"
+    regexp: "^{{ item.name }}:"
     create: true
     mode: '0644'
-  loop: "{{ base_setup_services | zip(range(base_setup_services | length)) | list }}"
+  loop: "{{ base_setup_services }}"
 
 - name: Add subgid entries for rootless podman
   ansible.builtin.lineinfile:
     path: /etc/subgid
-    line: "{{ item.0.name }}:{{ 100000 + item.1 * (base_setup_subuid_range_size | int) }}:{{ base_setup_subuid_range_size }}"
-    regexp: "^{{ item.0.name }}:"
+    line: "{{ item.name }}:{{ hash(item.name) | int(0, 16) % 10000 * base_setup_subuid_range_size + 100000 }}:{{ base_setup_subuid_range_size }}"
+    regexp: "^{{ item.name }}:"
     create: true
     mode: '0644'
-  loop: "{{ base_setup_services | zip(range(base_setup_services | length)) | list }}"
+  loop: "{{ base_setup_services }}"
 
 - name: Set subvolume ownership
   ansible.builtin.file:
