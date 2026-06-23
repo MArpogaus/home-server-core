@@ -2,7 +2,7 @@
 Description=Daily Btrfs snapshot timer for @%i
 
 [Timer]
-OnCalendar=daily
+OnCalendar={{ base_setup_btrfs_snapshot_schedule }}
 Persistent=true
 
 [Install]

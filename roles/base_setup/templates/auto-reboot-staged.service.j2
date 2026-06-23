@@ -1,5 +1,6 @@
 [Unit]
 Description=Reboot if rpm-ostree has a staged deployment
+After=podman-auto-update.service
 
 [Service]
 Type=oneshot

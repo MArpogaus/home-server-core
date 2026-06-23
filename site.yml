@@ -35,22 +35,3 @@
       loop: "{{ base_setup_services }}"
       loop_control:
         loop_var: svc
-
-    - name: Reload systemd user daemons for all service users
-      ansible.builtin.command:
-        cmd: "machinectl shell {{ svc.name }}@ /usr/bin/systemctl --user daemon-reload"
-      loop: "{{ base_setup_services }}"
-      loop_control:
-        loop_var: svc
-      changed_when: true
-      failed_when: false
-
-    - name: Restart user@.service for service users (triggers Quadlet generator)
-      ansible.builtin.systemd:
-        name: "user@{{ svc.uid }}.service"
-        state: restarted
-        scope: system
-      loop: "{{ base_setup_services }}"
-      loop_control:
-        loop_var: svc
-      failed_when: false

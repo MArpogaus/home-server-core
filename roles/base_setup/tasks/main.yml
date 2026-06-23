@@ -99,15 +99,6 @@
     mode: '0755'
   loop: "{{ base_setup_services }}"
 
-- name: Deploy sigstore config for ghcr.io/marpogaus (cosign signature lookup)
-  ansible.builtin.copy:
-    dest: /etc/containers/registries.d/ghcr.io-marpogaus.yaml
-    content: |
-      docker:
-        ghcr.io/marpogaus:
-          use-sigstore-attachments: true
-    mode: '0644'
-
 - name: Deploy snapshot service template
   ansible.builtin.template:
     src: btrfs-snapshot@.service.j2
@@ -146,15 +137,6 @@
     state: started
     scope: system
   loop: "{{ base_setup_services }}"
-
-- name: Create shared Podman network for each service user
-  ansible.builtin.command:
-    cmd: "podman network create --driver bridge --subnet 10.89.0.0/24 shared-network"
-  become: true
-  become_user: "{{ item.name }}"
-  loop: "{{ base_setup_services }}"
-  changed_when: false
-  failed_when: false
 
 - name: Deploy auto-reboot script for staged rpm-ostree deployments
   ansible.builtin.copy:
