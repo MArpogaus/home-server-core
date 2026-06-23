@@ -88,6 +88,7 @@
     cmd: "restorecon -Rv /var/services/{{ item.name }}"
   loop: "{{ base_setup_services }}"
   changed_when: true
+  failed_when: false
 
 - name: Ensure containers config directory exists for each service user
   ansible.builtin.file:
