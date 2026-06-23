@@ -69,12 +69,9 @@
 
 - name: Build SELinux file context targets
   ansible.builtin.set_fact:
-    base_setup_selinux_targets: >-
-      {{
-        ['/var/services/snapshots(/.*)?', '/var/services(/.*)?']
-        + (base_setup_services | map(attribute='name')
-           | map('regex_replace', '^(.*)$', '/var/services/\\1(/.*)?') | list)
-      }}
+    base_setup_selinux_targets:
+      - /var/services/snapshots(/.*)?
+      - /var/services(/.*)?
 
 - name: Install SELinux file context rules
   community.general.sefcontext:

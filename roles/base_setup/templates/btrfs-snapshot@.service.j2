@@ -5,4 +5,6 @@ After=btrfs-snapshot@%i.timer
 
 [Service]
 Type=oneshot
+Environment=BTRFS_SNAPSHOT_DIR={{ base_setup_btrfs_snapshot_dir }}
+Environment=BTRFS_SNAPSHOT_RETENTION_DAYS={{ base_setup_btrfs_snapshot_retention_days }}
 ExecStart=/usr/local/bin/btrfs-snapshot-cleanup.sh %i

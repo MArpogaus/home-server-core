@@ -2,8 +2,9 @@
 set -euo pipefail
 
 VOLUME_NAME="$1"
+BASE_DIR="${BTRFS_SNAPSHOT_DIR:-/var/services/snapshots}"
 SOURCE="/var/services/${VOLUME_NAME}"
-SNAPSHOT_DIR="/var/services/snapshots/${VOLUME_NAME}"
+SNAPSHOT_DIR="${BASE_DIR}/${VOLUME_NAME}"
 RETENTION_DAYS="${BTRFS_SNAPSHOT_RETENTION_DAYS:-30}"
 
 # Create snapshot directory if it doesn't exist
