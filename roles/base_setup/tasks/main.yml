@@ -2,16 +2,16 @@
 # Ignition creates /var as Btrfs partition
 # Ansible creates subvolumes under /var/services/
 
-- name: Ensure /var/services directory exists
+- name: Ensure services root directory exists
   ansible.builtin.file:
-    path: /var/services
+    path: "{{ base_setup_services_dir }}"
     state: directory
     mode: '0755'
 
 - name: Create Btrfs subvolumes for each service
   ansible.builtin.command:
-    cmd: "btrfs subvolume create /var/services/{{ item.name }}"
-    creates: "/var/services/{{ item.name }}"
+    cmd: "btrfs subvolume create {{ base_setup_services_dir }}/{{ item.name }}"
+    creates: "{{ base_setup_services_dir }}/{{ item.name }}"
   loop: "{{ base_setup_services }}"
   changed_when: true
 
@@ -25,7 +25,7 @@
   ansible.builtin.user:
     name: "{{ item.name }}"
     uid: "{{ item.uid }}"
-    home: "/var/services/{{ item.name }}"
+    home: "{{ base_setup_services_dir }}/{{ item.name }}"
     shell: /usr/sbin/nologin
     createhome: false
     system: true
@@ -51,7 +51,7 @@
 
 - name: Set subvolume ownership
   ansible.builtin.file:
-    path: "/var/services/{{ item.name }}"
+    path: "{{ base_setup_services_dir }}/{{ item.name }}"
     owner: "{{ item.name }}"
     group: "{{ item.name }}"
     state: directory
@@ -60,7 +60,7 @@
 
 - name: Ensure Quadlet systemd directory exists
   ansible.builtin.file:
-    path: "/var/services/{{ item.name }}/.config/containers/systemd"
+    path: "{{ base_setup_services_dir }}/{{ item.name }}/.config/containers/systemd"
     state: directory
     owner: "{{ item.name }}"
     group: "{{ item.name }}"
@@ -70,8 +70,8 @@
 - name: Build SELinux file context targets
   ansible.builtin.set_fact:
     base_setup_selinux_targets:
-      - /var/services/snapshots(/.*)?
-      - /var/services(/.*)?
+      - "{{ base_setup_services_dir }}/snapshots(/.*)?"
+      - "{{ base_setup_services_dir }}(/.*)?"
 
 - name: Install SELinux file context rules
   community.general.sefcontext:
@@ -82,14 +82,14 @@
 
 - name: Apply SELinux labels
   ansible.builtin.command:
-    cmd: "restorecon -Rv /var/services/{{ item.name }}"
+    cmd: "restorecon -Rv {{ base_setup_services_dir }}/{{ item.name }}"
   loop: "{{ base_setup_services }}"
   changed_when: true
   failed_when: false
 
 - name: Ensure containers config directory exists for each service user
   ansible.builtin.file:
-    path: "/var/services/{{ item.name }}/.config/containers"
+    path: "{{ base_setup_services_dir }}/{{ item.name }}/.config/containers"
     state: directory
     owner: "{{ item.uid }}"
     group: "{{ item.uid }}"

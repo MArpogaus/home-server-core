@@ -19,6 +19,9 @@ base_setup_services:
     role: monitoring_service
     repo: monitoring
 
+# Root directory for service data (subvolumes, home dirs)
+base_setup_services_dir: /var/services
+
 # Path prefix for service repos (services are at <path>/service-<name>)
 # Default: .. (sibling repos named service-<name>)
 # To organize under a services/ dir: ../services

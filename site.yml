@@ -30,7 +30,7 @@
         service_name: "{{ svc.name }}"
         service_user: "{{ svc.name }}"
         service_uid: "{{ svc.uid }}"
-        service_home: "/var/services/{{ svc.name }}"
+        service_home: "{{ base_setup_services_dir }}/{{ svc.name }}"
         service_repo: "{{ base_setup_services_path }}/service-{{ svc.repo }}"
       loop: "{{ base_setup_services }}"
       loop_control:
