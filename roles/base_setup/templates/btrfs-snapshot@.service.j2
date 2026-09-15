@@ -1,7 +1,5 @@
 [Unit]
 Description=Btrfs read-only snapshot of @%i
-BindsTo=btrfs-snapshot@%i.timer
-After=btrfs-snapshot@%i.timer
 
 [Service]
 Type=oneshot

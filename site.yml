@@ -1,25 +1,11 @@
 ---
 # SecureBlue Deployment Playbook
+# Service list and paths live in roles/base_setup/defaults/main.yml;
+# override per deployment in secrets/vars.yml.
 
 - name: Full deployment — base setup, services, and startup
   hosts: all
   gather_facts: true
-  vars:
-    # Service definitions (override uid per service in secrets)
-    base_setup_services:
-      - name: nextcloud
-        uid: "{{ nextcloud_uid | default(82) }}"
-        role: nextcloud_service
-        repo: nextcloud
-      - name: proxy
-        uid: "{{ proxy_uid | default(1001) }}"
-        role: bunker_service
-        repo: bunker
-      - name: monitoring
-        uid: "{{ monitoring_uid | default(1002) }}"
-        role: monitoring_service
-        repo: monitoring
-    base_setup_services_path: ..
   roles:
     - base_setup
   post_tasks:
@@ -29,9 +15,8 @@
       vars:
         service_name: "{{ svc.name }}"
         service_user: "{{ svc.name }}"
-        service_uid: "{{ svc.uid }}"
         service_home: "{{ base_setup_services_dir }}/{{ svc.name }}"
         service_repo: "{{ base_setup_services_path }}/service-{{ svc.repo }}"
-      loop: "{{ base_setup_services }}"
+      loop: "{{ base_setup_all_services }}"
       loop_control:
         loop_var: svc

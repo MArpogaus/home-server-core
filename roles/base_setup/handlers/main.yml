@@ -1,10 +1,10 @@
 ---
-- name: Restart snapshot services
-  ansible.builtin.systemd:
-    name: "btrfs-snapshot@{{ item }}"
-    state: restarted
-  loop: "{{ base_setup_services | map(attribute='name') | list }}"
-
 - name: Apply sysctl setting
   ansible.builtin.command: sysctl -w net.ipv4.ip_unprivileged_port_start=80
   changed_when: true
+
+- name: Start zram swap
+  ansible.builtin.systemd:
+    name: systemd-zram-setup@zram0.service
+    state: started
+    daemon_reload: true

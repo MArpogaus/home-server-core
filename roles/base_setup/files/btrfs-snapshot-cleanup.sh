@@ -1,28 +1,31 @@
 #!/bin/bash
+# Daily read-only Btrfs snapshot of one service subvolume, plus retention by snapshot date.
 set -euo pipefail
 
 VOLUME_NAME="$1"
 BASE_DIR="${BTRFS_SNAPSHOT_DIR:-/var/services/snapshots}"
 SERVICES_DIR="${BTRFS_SERVICES_DIR:-/var/services}"
+RETENTION_DAYS="${BTRFS_SNAPSHOT_RETENTION_DAYS:-30}"
 SOURCE="${SERVICES_DIR}/${VOLUME_NAME}"
 SNAPSHOT_DIR="${BASE_DIR}/${VOLUME_NAME}"
-RETENTION_DAYS="${BTRFS_SNAPSHOT_RETENTION_DAYS:-30}"
 
-# Create snapshot directory if it doesn't exist
 mkdir -p "${SNAPSHOT_DIR}"
 
-# Create timestamped read-only snapshot
-SNAPSHOT_NAME="$(date +%Y-%m-%d)"
-SNAPSHOT_PATH="${SNAPSHOT_DIR}/${SNAPSHOT_NAME}"
-
-if [ -d "${SNAPSHOT_PATH}" ]; then
-    echo "Snapshot ${SNAPSHOT_PATH} already exists today, skipping."
-    exit 0
+TODAY="$(date +%Y-%m-%d)"
+if [ -d "${SNAPSHOT_DIR}/${TODAY}" ]; then
+    echo "Snapshot ${SNAPSHOT_DIR}/${TODAY} already exists, skipping."
+else
+    btrfs subvolume snapshot -r "${SOURCE}" "${SNAPSHOT_DIR}/${TODAY}"
+    echo "Created snapshot: ${SNAPSHOT_DIR}/${TODAY}"
 fi
 
-btrfs subvolume snapshot -r "${SOURCE}" "${SNAPSHOT_PATH}"
-echo "Created snapshot: ${SNAPSHOT_PATH}"
-
-# Delete old snapshots
-find "${SNAPSHOT_DIR}" -maxdepth 1 -type d -mtime +"${RETENTION_DAYS}" -exec rm -rf {} \;
-echo "Cleaned snapshots older than ${RETENTION_DAYS} days"
+# Snapshots are read-only subvolumes: rm -rf fails on them, and mtime is the
+# source's mtime, not the creation date. Compare the date in the name instead.
+CUTOFF="$(date -d "-${RETENTION_DAYS} days" +%Y-%m-%d)"
+for snap in "${SNAPSHOT_DIR}"/????-??-??; do
+    [ -d "${snap}" ] || continue
+    if [[ "$(basename "${snap}")" < "${CUTOFF}" ]]; then
+        btrfs subvolume delete "${snap}"
+        echo "Deleted snapshot: ${snap}"
+    fi
+done

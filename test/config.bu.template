@@ -67,6 +67,21 @@ storage:
               return polkit.Result.YES;
             }
           });
+    - path: /var/home/core/disable-userns.sh
+      mode: 0755
+      user:
+        name: core
+      group:
+        name: core
+      contents:
+        inline: |
+          #!/usr/bin/env bash
+          # SecureBlue ships the userns hardening module enabled; rootless Podman
+          # needs it off. Runs once on the first login after the rebase reboot.
+          set -euo pipefail
+          ujust set-container-userns on
+          sed -i '/disable-userns.sh/d' /var/home/core/.bash_profile
+          rm -f /var/home/core/disable-userns.sh
     - path: /opt/install_secureblue.sh
       mode: 0755
       contents:
@@ -101,15 +116,7 @@ storage:
             sudo cp POLICY.tmp /etc/containers/policy.json
             sudo rm POLICY.tmp
 
-            # Write post-reboot script to disable SELinux userns module (SecureBlue-specific)
-            cat > /var/home/core/disable-userns.sh << 'SCRIPT'
-#!/usr/bin/env bash
-set -euo pipefail
-ujust set-container-userns on
-sed -i '/disable-userns.sh/d' /var/home/core/.bash_profile
-rm -f /var/home/core/disable-userns.sh
-SCRIPT
-            chmod 755 /var/home/core/disable-userns.sh
+            # Runs on the next login after the reboot (deployed by Ignition below)
             echo '/var/home/core/disable-userns.sh' >> /var/home/core/.bash_profile
 
             sudo sed -i -e '/\/opt\/install_secureblue.sh/d' /var/home/core/.bash_profile
@@ -120,6 +127,10 @@ SCRIPT
           fi
     - path: /var/home/core/.bash_profile
       overwrite: false
+      user:
+        name: core
+      group:
+        name: core
       append:
         - inline: |
             /opt/install_secureblue.sh

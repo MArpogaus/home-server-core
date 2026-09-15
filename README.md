@@ -1,120 +1,107 @@
 # ansible-base
 
 Ansible playbook for base provisioning of a SecureBlue (FCOS) home server.
+Target: a thin client with 8 GB RAM, one Btrfs SSD, rootless Podman Quadlets.
 
 ## Prerequisites
 
-- Ansible Core 2.21+
-- `community.general` collection (for `run0` become method)
-- Fedora CoreOS 44+ (SecureBlue `securecore-main-hardened`)
-- `run0` via polkit (default on SecureBlue — no sudo required)
+- Ansible Core 2.21+, `community.general` (for the `run0` become method)
+- Fedora CoreOS 44+ rebased to SecureBlue `securecore-main-hardened`
+- Passwordless `run0` for `wheel` via polkit (set up in `test/config.bu.template`)
 
 ## Architecture
 
-Single playbook (`site.yml`) with one play that loops over `base_setup_services`:
-
 ```
 site.yml (1 play)
-  ├── base_setup role (this repo)          — Btrfs, users, SELinux, snapshots, network, firewall
-  ├── nextcloud_service role               — Nextcloud Quadlets (service-nextcloud)
-  ├── bunker_service role                  — Bunkerweb proxy (service-bunker)
-  └── monitoring_service role              — Loki/Prometheus/Grafana (service-monitoring)
+  ├── base_setup role (this repo)   Btrfs subvolumes, users, subuid, SELinux,
+  │                                 snapshots, off-box backup, zram, firewall,
+  │                                 auto-update / auto-reboot timers
+  ├── nextcloud_service role        service-nextcloud
+  ├── bunker_service role           service-bunker
+  └── monitoring_service role       service-monitoring
 ```
 
-Service roles live in separate repos referenced via `ansible.cfg` `roles_path`.
+One Linux user per service, each with its own systemd user manager and Podman
+network. Cross-service traffic goes through host-published ports
+(`host.containers.internal:<port>`), never container names. The service list
+lives in `roles/base_setup/defaults/main.yml`; override entries in
+`secrets/vars.yml`.
 
-## Task Reference
+## What `base_setup` does
 
-### `base_setup` role — 27 tasks
-
-| # | Task | Module | Rationale |
-|---|------|--------|-----------|
-| 1 | Ensure `/var/services` exists | `file` | Root parent dir for all service subvolumes |
-| 2 | Create Btrfs subvolumes per service | `command` | Separate CoW subvolumes for snapshot isolation |
-| 3 | Create snapshots subvolume | `command` | Store read-only snapshots outside service subvols |
-| 4 | Create system users | `user` | Dedicated non-login UIDs for rootless Podman |
-| 5-6 | Add subuid/subgid ranges | `lineinfile` | Rootless Podman needs UID/GID mapping ranges |
-| 7 | Set subvolume ownership | `file` | Service user must own its subvolume root |
-| 8 | Create Quadlet systemd dir | `file` | Rootless Quadlet reads `.container` from `~/.config/containers/systemd` |
-| 9 | Build SELinux target list | `set_fact` | Compute paths for `container_file_t` labeling |
-| 10 | Install SELinux contexts | `sefcontext` | Allow Podman containers to access service dirs |
-| 11 | Apply SELinux labels | `command` | `restorecon` to activate the new contexts |
-| 12 | Create containers config dir | `file` | Podman auth/config stored here |
-| 13-14 | Deploy snapshot service+timer | `template` | Systemd oneshot + `OnCalendar` timer for Btrfs snapshots |
-| 15 | Deploy snapshot cleanup script | `copy` | Shell script: creates RO snapshots, prunes old ones |
-| 16 | Enable snapshot timers | `systemd` | Activate per-service snapshot schedule |
-| 17 | Enable linger | `command` | `loginctl enable-linger` keeps user systemd alive after logout |
-| 18 | Start systemd user managers | `systemd` | Activates `user@.service` for Quadlet to run |
-| 19-20 | Deploy auto-reboot script+timer | `copy`+`template` | Automated reboot after `rpm-ostree update` staged |
-| 21 | Enable auto-reboot timer | `systemd` | `OnCalendar=daily` at 03:00 + 30min random delay |
-| 22 | Enable podman auto-update timers | `command` | `podman-auto-update.timer` checks registry for new images |
-| 23 | Ensure firewalld running | `systemd` | `firewalld` must be active before rules |
-
-... via `machinectl shell` | | 24-26 | Open firewall (SSH, HTTP, HTTPS) | `command` | Minimal surface: only 22/80/443 | | 27 | Reload firewalld | `command` | Apply permanent rules | | 28 | Allow unprivileged ports >=80 | `copy` | `sysctl` so rootless Podman can bind 80/443 | | 29 | Reload systemd daemon | `systemd` | Pick up new unit files |
+| Area | How |
+|---|---|
+| Storage | Btrfs subvolume per service under `/var/services`, `snapshots` subvolume |
+| Users | System users, linger, optional extra `groups`; subuid/subgid range starts at `uid * 65536 + 100000`, so it is stable and collision-free |
+| SELinux | `container_file_t` on `/var/services` |
+| Snapshots | `btrfs-snapshot@<svc>.timer` (daily RO snapshot, retention by date in the name) |
+| Backup | `btrfs-backup.timer` (01:00): incremental `btrfs send` to `base_setup_backup_dir` when it is mounted |
+| Memory | Swap on zram (`base_setup_zram_size`) |
+| Updates | `podman-auto-update.timer` per user, `auto-reboot-staged.timer` for rpm-ostree |
+| Firewall | firewalld: ssh, http, https only; `ip_unprivileged_port_start=80` |
 
 ## Usage
 
+Service repos are siblings: `../service-nextcloud`, `../service-bunker`,
+`../service-monitoring`. Inventory and secrets live in `deployment-private`.
+
 ```bash
-# Clone service repos alongside ansible-base:
-#   ../service-nextcloud
-#   ../service-bunker
-#   ../service-monitoring
-
-# Deploy via deployment-private (recommended):
 ../deployment-private/deploy.sh
-
-# Or directly:
-ansible-playbook -i inventory/hosts.ini site.yml --extra-vars "@secrets/vars.yml"
 ```
 
-## Custom Deployment
+## Adding a service
 
-Files requiring changes:
+1. Copy `service-template`, replace `__NAME__`.
+2. Add it to `base_setup_extra_services` in `secrets/vars.yml` (no need to
+   restate the built-in three):
 
-| File | What to change |
+   ```yaml
+   base_setup_extra_services:
+     - name: immich
+       uid: 1003
+       role: immich_service
+       repo: immich
+   ```
+3. Add its `ansible-role` to `roles_path` in `ansible.cfg`.
+
+Each service gets a subvolume, user, subuid range, SELinux label, linger,
+snapshot timer and auto-update timer automatically.
+
+## Variables
+
+| Var | Default |
 |---|---|
-| `inventory/hosts.ini` | Hostname/IP, SSH port, SSH key path, user |
-| `secrets/vars.yml` (in `deployment-private`) | All passwords, domain, tokens, image tags |
-| `roles/base_setup/defaults/main.yml` | `base_setup_services` list, snapshot schedule, subuid range size |
-| `ansible.cfg` | `roles_path` if service repos are elsewhere |
-| `test/config.bu.template` | SSH public key, password hash, GHCR key material |
+| `base_setup_services` | nextcloud / proxy / monitoring |
+| `base_setup_extra_services` | `[]` (appended to the above) |
+| `base_setup_services_dir` | `/var/services` |
+| `base_setup_btrfs_snapshot_retention_days` | 30 |
+| `base_setup_btrfs_snapshot_schedule` | `daily` |
+| `base_setup_backup_dir` | `""` (disabled) |
+| `base_setup_backup_retention_days` | 90 |
+| `base_setup_firewall_services` | ssh, http, https |
 
-### Adding a new service
+## Test VM
 
-1. Add entry to `base_setup_services` in `defaults/main.yml`
-2. Create `service-<name>/` with `ansible-role/<name>_service/` (Quadlet files, templates, tasks)
-3. Add `roles_path` entry in `ansible.cfg`
-
-## Generalization Status
-
-| Aspect | Status |
-|---|---|
-| Service users/UIDs | Configurable via `secrets/vars.yml` |
-| Subuid ranges | Computed from index (name-based would be better) |
-| Snapshot schedule | Configurable via `base_setup_btrfs_snapshot_schedule` |
-| Snapshot retention | Configurable via `base_setup_btrfs_snapshot_retention_days` (now wired through systemd unit env) |
-| Snapshot dir | Configurable via `base_setup_btrfs_snapshot_dir` (now wired through systemd unit env) |
-| Firewall services | Hardcoded to ssh/http/https |
-| Port start floor | Hardcoded to 80 |
-| Reboot schedule | Hardcoded to 03:00+30m |
-
-## Files
-
+```bash
+python3 test/start_vm.py --fresh      # first time
+python3 test/start_vm.py --save-base  # once the rebase is done, VM shut down
+python3 test/start_vm.py --restore    # every reset after that
 ```
-ansible-base/
-  ansible.cfg                 # Ansible config (run0, roles_path, SSH)
-  site.yml                    # Main playbook (1 play, loop over services)
-  .pre-commit-config.yaml     # Pre-commit hooks
-  roles/base_setup/
-    defaults/main.yml         # Variable defaults
-    tasks/main.yml            # 27 tasks
-    handlers/main.yml         # Restart snapshot services
-    templates/                # *.j2 for systemd units
-    files/                    # Static scripts
-  inventory/                  # hosts.ini (gitignored)
-  test/                       # Butane, VM launcher, CI helpers
-  .github/workflows/          # CI/CD
+
+See `test/README.md`. The playbook is deployed against it from
+`deployment-private/`.
+
+## Development
+
+```bash
+pre-commit install --install-hooks -t pre-commit -t commit-msg -t pre-push
 ```
+
+Plain `pre-commit install` wires up only the pre-commit stage, so the
+commitizen message and branch checks stay dormant. Hooks: shellcheck,
+ansible-lint (which owns YAML style here), commitizen for conventional commits.
+CI runs the same set on push and pull request. Actions are pinned to SHAs, and
+dependabot updates actions and hook revisions weekly against `dev`.
 
 ## License
 

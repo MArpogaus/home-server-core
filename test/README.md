@@ -1,59 +1,87 @@
-# Fedora CoreOS Test-VM
+# Test VM
 
-## Schnellstart
+A Fedora CoreOS guest that rebases itself to SecureBlue, so the playbook can be
+tested against the real target platform.
+
+## Use
 
 ```bash
-# 1. VM starten (KVM, headless, Port-Forwarding SSH auf 2222)
-python3 start_vm.py
+python3 start_vm.py             # boot (reuses the existing disk)
+python3 start_vm.py --fresh     # rebuild the disk, re-run Ignition and the rebase
+python3 start_vm.py --save-base # VM shut down: tag this disk state "base"
+python3 start_vm.py --restore   # roll back to "base" and boot
+```
 
-# 2. Deployment spielen (in neuem Terminal)
+Then, from `deployment-private/`:
+
+```bash
 ./deploy.sh
-
-# 3. Auf der VM prüfen
-ssh core@localhost -p 2222
-podman info
-systemctl --user list-unit-files | grep nextcloud
+./functional_test.sh
 ```
 
-## Dateien
+## Resetting between test runs
 
-| File | Zweck |
-|---|---|
-| `start_vm.py` | Lädt FCOS-Image, kompiliert Butane→Ignition, startet VM mit KVM |
-| `config.bu` | Butane-Konfiguration (YAML) für Fedora CoreOS |
-| `config.ign` | Generierte Ignition-Konfiguration (JSON) — wird automatisch aus `config.bu` |
-| `deploy.sh` | Spielt ansible-base `site.yml` gegen die VM |
+Three levels, cheapest first.
 
-## Butane-Konfiguration
+| Want | Do | Cost |
+|---|---|---|
+| Undo what Ansible created | `deployment-private/reset.sh` | seconds, VM keeps running |
+| Back to a clean provisioned host | `--restore` | seconds, VM restarts |
+| Back to bare Fedora CoreOS | `--fresh` | download plus rebase plus two reboots |
 
-Die Ignition-Konfiguration wird mit **Butane** generiert (offizielles FCOS-Tool):
+`--restore` is the one you want most of the time. Getting a usable VM costs an
+image download, an rpm-ostree rebase and two reboots, and none of that is worth
+repeating to test a playbook change.
+
+### Taking the base snapshot
+
+Do this once, after the rebase has finished:
 
 ```bash
-# Butane als Container
-podman run --rm -i -v "${PWD}:/pwd" -w /pwd quay.io/coreos/butane:release --pretty --strict config.bu > config.ign
-
-# Oder Butane-Binary (falls installiert)
-butane --pretty --strict config.bu > config.ign
+ssh -p 2222 -i coreos_key core@localhost rpm-ostree status   # expect securecore
+ssh -p 2222 -i coreos_key core@localhost sudo systemctl poweroff
+python3 start_vm.py --save-base
 ```
 
-`start_vm.py` führt diesen Schritt automatisch aus.
+The VM must be shut down. `qemu-img` refuses to write a snapshot into a disk
+QEMU still has open, and a snapshot taken mid-rebase would capture a broken
+state. Re-running `--save-base` replaces the existing snapshot.
 
-## Architektur
+This is a qcow2 internal snapshot: it lives inside `fcos.qcow2`, costs only the
+blocks that change afterwards, and needs no second image or backing-file chain.
+On `--restore` the Ignition config is not regenerated, because Ignition only
+runs on a first boot and would be ignored.
+
+## What start_vm.py does
+
+1. Creates `coreos_key` if missing.
+2. Downloads and extracts the FCOS image, grows it to 20 GB. The `.xz` stays as
+   a cache, so `--fresh` skips the download.
+3. Renders `config.bu` from `config.bu.template` with the public key and, if
+   `mkpasswd` is available, a console password (`VM_PASSWORD`, default `test`).
+   FCOS gives the `wheel` group passwordless sudo, so the password is optional.
+4. Converts it to `config.ign` with `butane`, falling back to the Butane
+   container image if the binary is not installed.
+5. Boots QEMU with 4 GB and 2 vCPUs, SSH forwarded to port 2222.
+
+## Boot sequence
 
 ```
-Container → localhost:2222 → QEMU Port-Forward → VM:22 (SSH)
+FCOS first boot → Ignition applies config.ign → install_secureblue.sh
+  → rpm-ostree rebase to securecore → reboot
+  → first login runs disable-userns.sh (rootless Podman needs userns)
+  → SSH available, ready for Ansible
 ```
 
-QEMU nutzt `user` network mode (NAT) — keine Bridge-Interfaces nötig.
+The rebase takes a few minutes and SSH only answers after the second boot.
 
-## VM stoppen
+## One key everywhere
 
-Im QEMU-Terminal: **Ctrl+C**
+`coreos_key` is the single SSH identity: its public half is baked into the
+Ignition config, and `deployment-private/ssh/coreos_key` must be the same key.
+If you regenerate it, copy both halves over and re-run with `--fresh`.
 
-## Voraussetzungen
+## Requirements
 
-- `qemu-system-x86_64` (KVM)
-- `/dev/kvm` existiert
-- `python3` (stdlib only, keine externen Dependencies)
-- `podman` oder `butane` Binary (für Ignition-Konfig-Generierung)
-- `unxz` (für FCOS-Image-Entpacken)
+`qemu-system-x86_64` with `/dev/kvm`, `qemu-img`, `python3`, `unxz`, and either
+`butane` or `podman`. Optional: `mkpasswd` for the console password.

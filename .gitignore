@@ -132,8 +132,6 @@ $RECYCLE.BIN/
 *.log
 .env
 
-# Inventory (contains host-specific details)
-inventory/hosts.ini
 
 # SSH Keys (private and public)
 *.key
@@ -160,6 +158,3 @@ fcos.qcow2
 # Backup files
 *.bak
 *.backup
-
-# Secrets (private configuration)
-secrets/vars.yml

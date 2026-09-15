@@ -1,0 +1,9 @@
+[Unit]
+Description=Incremental btrfs send of service snapshots to {{ base_setup_backup_dir }}
+
+[Service]
+Type=oneshot
+Environment=BTRFS_SNAPSHOT_DIR={{ base_setup_btrfs_snapshot_dir }}
+Environment=BTRFS_BACKUP_DIR={{ base_setup_backup_dir }}
+Environment=BTRFS_BACKUP_RETENTION_DAYS={{ base_setup_backup_retention_days }}
+ExecStart=/usr/local/bin/btrfs-backup.sh

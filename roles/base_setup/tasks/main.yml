@@ -2,22 +2,26 @@
 # Ignition creates /var as Btrfs partition
 # Ansible creates subvolumes under /var/services/
 
+- name: Merge built-in and extra service definitions
+  ansible.builtin.set_fact:
+    base_setup_all_services: "{{ base_setup_services + base_setup_extra_services }}"
+
 - name: Ensure services root directory exists
   ansible.builtin.file:
     path: "{{ base_setup_services_dir }}"
     state: directory
-    mode: '0755'
+    mode: "0755"
 
 - name: Create Btrfs subvolumes for each service
   ansible.builtin.command:
-    cmd: "btrfs subvolume create {{ base_setup_services_dir }}/{{ item.name }}"
+    cmd: btrfs subvolume create {{ base_setup_services_dir }}/{{ item.name }}
     creates: "{{ base_setup_services_dir }}/{{ item.name }}"
-  loop: "{{ base_setup_services }}"
+  loop: "{{ base_setup_all_services }}"
   changed_when: true
 
 - name: Create Btrfs subvolume for snapshots
   ansible.builtin.command:
-    cmd: "btrfs subvolume create {{ base_setup_btrfs_snapshot_dir }}"
+    cmd: btrfs subvolume create {{ base_setup_btrfs_snapshot_dir }}
     creates: "{{ base_setup_btrfs_snapshot_dir }}"
   changed_when: true
 
@@ -29,25 +33,27 @@
     shell: /usr/sbin/nologin
     createhome: false
     system: true
-  loop: "{{ base_setup_services }}"
+    groups: "{{ item.groups | default([]) }}"
+    append: true
+  loop: "{{ base_setup_all_services }}"
 
 - name: Add subuid entries for rootless podman
   ansible.builtin.lineinfile:
     path: /etc/subuid
-    line: "{{ item.name }}:{{ hash(item.name) | int(0, 16) % 10000 * base_setup_subuid_range_size + 100000 }}:{{ base_setup_subuid_range_size }}"
+    line: "{{ item.name }}:{{ base_setup_subuid_start }}:{{ base_setup_subuid_range_size }}"
     regexp: "^{{ item.name }}:"
     create: true
-    mode: '0644'
-  loop: "{{ base_setup_services }}"
+    mode: "0644"
+  loop: "{{ base_setup_all_services }}"
 
 - name: Add subgid entries for rootless podman
   ansible.builtin.lineinfile:
     path: /etc/subgid
-    line: "{{ item.name }}:{{ hash(item.name) | int(0, 16) % 10000 * base_setup_subuid_range_size + 100000 }}:{{ base_setup_subuid_range_size }}"
+    line: "{{ item.name }}:{{ base_setup_subuid_start }}:{{ base_setup_subuid_range_size }}"
     regexp: "^{{ item.name }}:"
     create: true
-    mode: '0644'
-  loop: "{{ base_setup_services }}"
+    mode: "0644"
+  loop: "{{ base_setup_all_services }}"
 
 - name: Set subvolume ownership
   ansible.builtin.file:
@@ -55,8 +61,8 @@
     owner: "{{ item.name }}"
     group: "{{ item.name }}"
     state: directory
-    mode: '0750'
-  loop: "{{ base_setup_services }}"
+    mode: "0750"
+  loop: "{{ base_setup_all_services }}"
 
 - name: Ensure Quadlet systemd directory exists
   ansible.builtin.file:
@@ -64,8 +70,8 @@
     state: directory
     owner: "{{ item.name }}"
     group: "{{ item.name }}"
-    mode: '0755'
-  loop: "{{ base_setup_services }}"
+    mode: "0755"
+  loop: "{{ base_setup_all_services }}"
 
 - name: Build SELinux file context targets
   ansible.builtin.set_fact:
@@ -82,70 +88,62 @@
 
 - name: Apply SELinux labels
   ansible.builtin.command:
-    cmd: "restorecon -Rv {{ base_setup_services_dir }}/{{ item.name }}"
-  loop: "{{ base_setup_services }}"
+    cmd: restorecon -Rv {{ base_setup_services_dir }}/{{ item.name }}
+  loop: "{{ base_setup_all_services }}"
   changed_when: true
   failed_when: false
-
-- name: Ensure containers config directory exists for each service user
-  ansible.builtin.file:
-    path: "{{ base_setup_services_dir }}/{{ item.name }}/.config/containers"
-    state: directory
-    owner: "{{ item.uid }}"
-    group: "{{ item.uid }}"
-    mode: '0755'
-  loop: "{{ base_setup_services }}"
 
 - name: Deploy snapshot service template
   ansible.builtin.template:
     src: btrfs-snapshot@.service.j2
     dest: /etc/systemd/system/btrfs-snapshot@.service
-    mode: '0644'
-  notify: Restart snapshot services
+    mode: "0644"
 
 - name: Deploy snapshot timer template
   ansible.builtin.template:
     src: btrfs-snapshot@.timer.j2
     dest: /etc/systemd/system/btrfs-snapshot@.timer
-    mode: '0644'
-  notify: Restart snapshot services
+    mode: "0644"
 
 - name: Deploy snapshot cleanup script
   ansible.builtin.copy:
     src: btrfs-snapshot-cleanup.sh
     dest: /usr/local/bin/btrfs-snapshot-cleanup.sh
-    mode: '0755'
+    mode: "0755"
 
+# daemon_reload here, not at the end: these unit files are new on a first run
+# and systemd cannot enable a unit it has not seen yet.
 - name: Enable and start snapshot timers for each service
   ansible.builtin.systemd:
-    name: "btrfs-snapshot@{{ item.name }}.timer"
+    name: btrfs-snapshot@{{ item.name }}.timer
     enabled: true
     state: started
-  loop: "{{ base_setup_services }}"
+    daemon_reload: true
+  loop: "{{ base_setup_all_services }}"
 
 - name: Enable linger for service users (persistent systemd user managers)
-  ansible.builtin.command: "loginctl enable-linger {{ item.name }}"
-  loop: "{{ base_setup_services }}"
+  ansible.builtin.command: loginctl enable-linger {{ item.name }}
+  loop: "{{ base_setup_all_services }}"
   changed_when: true
 
 - name: Start systemd user managers for service users (activate user bus)
   ansible.builtin.systemd:
-    name: "user@{{ item.uid }}.service"
+    name: user@{{ item.uid }}.service
     state: started
     scope: system
-  loop: "{{ base_setup_services }}"
+  loop: "{{ base_setup_all_services }}"
 
 - name: Deploy auto-reboot script for staged rpm-ostree deployments
   ansible.builtin.copy:
     src: auto-reboot-staged.sh
     dest: /usr/local/bin/auto-reboot-staged.sh
-    mode: '0755'
+    mode: "0755"
 
 - name: Deploy auto-reboot systemd service and timer
   ansible.builtin.template:
     src: "{{ item }}.j2"
-    dest: "/etc/systemd/system/{{ item }}"
-    mode: '0644'
+    dest: /etc/systemd/system/{{ item }}
+    mode: "0644"
   loop:
     - auto-reboot-staged.service
     - auto-reboot-staged.timer
@@ -155,14 +153,14 @@
     name: auto-reboot-staged.timer
     enabled: true
     state: started
+    daemon_reload: true
 
 - name: Enable podman auto-update timer for service users
-  ansible.builtin.command:
-    cmd: "machinectl shell {{ item.name }}@ /usr/bin/systemctl --user enable --now podman-auto-update.timer"
-  loop: "{{ base_setup_services }}"
+  ansible.builtin.command: # noqa: command-instead-of-module
+    cmd: systemctl --user -M {{ item.name }}@ enable --now podman-auto-update.timer
+  loop: "{{ base_setup_all_services }}"
   register: base_setup_auto_update_enable
-  changed_when: "'Created symlink' in base_setup_auto_update_enable.stdout"
-  failed_when: false
+  changed_when: "'Created symlink' in base_setup_auto_update_enable.stderr"
 
 - name: Ensure firewalld is running
   ansible.builtin.systemd:
@@ -170,22 +168,17 @@
     state: started
     enabled: true
 
+# ansible.posix.firewalld applies the rule to the running firewall and to the
+# permanent config in one step. `firewall-cmd --reload` is deliberately avoided:
+# it rebuilds the nftables ruleset and wedges the SSH connection Ansible is
+# running over, hanging the play.
 - name: Configure firewall to allow SSH, HTTP, and HTTPS only
-  ansible.builtin.command:
-    cmd: "firewall-cmd --permanent --add-service={{ item }}"
-  loop:
-    - ssh
-    - http
-    - https
-  register: base_setup_firewall_add
-  changed_when: "'already' not in base_setup_firewall_add.stderr"
-  failed_when: false
-
-- name: Reload firewall to apply permanent rules
-  ansible.builtin.command:
-    cmd: firewall-cmd --reload
-  changed_when: true
-  failed_when: false
+  ansible.posix.firewalld:
+    service: "{{ item }}"
+    state: enabled
+    permanent: true
+    immediate: true
+  loop: "{{ base_setup_firewall_services }}"
 
 - name: Allow unprivileged users to bind to ports >= 80 (for rootless Podman)
   ansible.builtin.copy:
@@ -193,10 +186,38 @@
       # Allow rootless Podman to publish ports >= 80
       net.ipv4.ip_unprivileged_port_start=80
     dest: /etc/sysctl.d/90-unprivileged-port-start.conf
-    mode: '0644'
+    mode: "0644"
   register: base_setup_sysctl_config
   notify: Apply sysctl setting
 
-- name: Reload systemd daemon
+- name: Deploy off-box backup script
+  ansible.builtin.copy:
+    src: btrfs-backup.sh
+    dest: /usr/local/bin/btrfs-backup.sh
+    mode: "0755"
+
+- name: Deploy off-box backup service and timer
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: /etc/systemd/system/{{ item }}
+    mode: "0644"
+  loop:
+    - btrfs-backup.service
+    - btrfs-backup.timer
+
+- name: Enable off-box backup timer when a backup target is configured
   ansible.builtin.systemd:
+    name: btrfs-backup.timer
+    enabled: "{{ base_setup_backup_dir != '' }}"
+    state: "{{ 'started' if base_setup_backup_dir != '' else 'stopped' }}"
     daemon_reload: true
+
+- name: Enable swap on zram
+  ansible.builtin.copy:
+    dest: /etc/systemd/zram-generator.conf
+    mode: "0644"
+    content: |
+      [zram0]
+      zram-size = min(ram / 2, 4096)
+      compression-algorithm = zstd
+  notify: Start zram swap
