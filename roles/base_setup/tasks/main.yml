@@ -89,8 +89,10 @@
   ansible.builtin.command:
     cmd: restorecon -Rv {{ base_setup_services_dir }}/{{ item.name }}
   loop: "{{ base_setup_all_services }}"
-  changed_when: true
-  failed_when: false
+  register: base_setup_restorecon
+  # restorecon prints one line per file it relabels, so silence means nothing
+  # needed changing. Without this the play reports a change on every run.
+  changed_when: base_setup_restorecon.stdout != ''
 
 - name: Deploy snapshot service template
   ansible.builtin.template:
@@ -121,9 +123,10 @@
   loop: "{{ base_setup_all_services }}"
 
 - name: Enable linger for service users (persistent systemd user managers)
-  ansible.builtin.command: loginctl enable-linger {{ item.name }}
+  ansible.builtin.command:
+    cmd: loginctl enable-linger {{ item.name }}
+    creates: "/var/lib/systemd/linger/{{ item.name }}"
   loop: "{{ base_setup_all_services }}"
-  changed_when: true
 
 - name: Start systemd user managers for service users (activate user bus)
   ansible.builtin.systemd:

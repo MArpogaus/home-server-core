@@ -57,6 +57,15 @@ storage:
           docker:
             ghcr.io/marpogaus:
               use-sigstore-attachments: true
+    - path: /etc/ssh/sshd_config.d/10-no-passwords.conf
+      mode: 0644
+      contents:
+        inline: |
+          # Keys only. The console password exists for local recovery; it must
+          # not be usable over the network.
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          PermitRootLogin no
     - path: /etc/polkit-1/rules.d/60-run0-fast-user-auth.rules
       mode: 0644
       contents:
