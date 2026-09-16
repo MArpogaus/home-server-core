@@ -10,7 +10,13 @@ python3 start_vm.py             # boot (reuses the existing disk)
 python3 start_vm.py --fresh     # rebuild the disk, re-run Ignition and the rebase
 python3 start_vm.py --save-base # VM shut down: tag this disk state "base"
 python3 start_vm.py --restore   # roll back to "base" and boot
+python3 start_vm.py --help      # all options
 ```
+
+The guest gets 8 GB and 2 vCPUs by default, matching the target thin client.
+Override with `--memory` and `--cpus`. Sizing it below the real hardware makes
+a from-scratch start, which pulls every image while starting every container,
+fail under memory pressure the real box would never see.
 
 Then, from `deployment-private/`:
 
