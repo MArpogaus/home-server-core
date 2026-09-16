@@ -82,6 +82,23 @@ FCOS first boot → Ignition applies config.ign → install_secureblue.sh
 
 The rebase takes a few minutes and SSH only answers after the second boot.
 
+## Reaching the VM from a rootless container
+
+From the host, `localhost` works. From inside a rootless Podman container it
+does not, and neither does `host.containers.internal`: that name is a pasta
+mapping into a namespace such a container cannot traverse, so every port comes
+back refused even while QEMU is listening on `0.0.0.0`.
+
+Use the host's LAN address instead, which is an ordinary routed destination:
+
+```bash
+ip -4 addr show scope global | grep inet    # on the host
+TARGET_HOST=<that address> ./functional_test.sh
+```
+
+`deploy.sh`, `functional_test.sh` and `reset.sh` all honour `TARGET_HOST` and
+`TARGET_PORT`.
+
 ## One key everywhere
 
 `coreos_key` is the single SSH identity: its public half is baked into the
