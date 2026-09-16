@@ -45,7 +45,7 @@ Do this once, after the rebase has finished:
 
 ```bash
 ssh -p 2222 -i coreos_key core@localhost rpm-ostree status   # expect securecore
-ssh -p 2222 -i coreos_key core@localhost sudo systemctl poweroff
+ssh -p 2222 -i coreos_key core@localhost run0 systemctl poweroff
 python3 start_vm.py --save-base
 ```
 
@@ -68,7 +68,8 @@ runs on a first boot and would be ignored.
    FCOS gives the `wheel` group passwordless sudo, so the password is optional.
 4. Converts it to `config.ign` with `butane`, falling back to the Butane
    container image if the binary is not installed.
-5. Boots QEMU with 4 GB and 2 vCPUs, SSH forwarded to port 2222.
+5. Boots QEMU with the requested RAM and vCPUs (8 GB, 2 by default),
+   SSH forwarded to port 2222.
 
 ## Boot sequence
 

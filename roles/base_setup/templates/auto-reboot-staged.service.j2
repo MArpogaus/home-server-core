@@ -1,6 +1,7 @@
 [Unit]
 Description=Reboot if rpm-ostree has a staged deployment
-After=podman-auto-update.service
+# No After=podman-auto-update.service: that timer runs in each service
+# user's manager, and a system unit cannot order against a user unit.
 
 [Service]
 Type=oneshot

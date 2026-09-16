@@ -23,7 +23,7 @@ site.yml (1 play)
 
 One Linux user per service, each with its own systemd user manager and Podman
 network. Cross-service traffic goes through host-published ports
-(`host.containers.internal:<port>`), never container names. The service list
+(the host address plus the published port), never container names. The service list
 lives in `roles/base_setup/defaults/main.yml`; override entries in
 `secrets/vars.yml`.
 
@@ -36,7 +36,7 @@ lives in `roles/base_setup/defaults/main.yml`; override entries in
 | SELinux | `container_file_t` on `/var/services` |
 | Snapshots | `btrfs-snapshot@<svc>.timer` (daily RO snapshot, retention by date in the name) |
 | Backup | `btrfs-backup.timer` (01:00): incremental `btrfs send` to `base_setup_backup_dir` when it is mounted |
-| Memory | Swap on zram (`base_setup_zram_size`) |
+| Memory | Swap on zram, sized `min(ram / 2, 4096)` |
 | Updates | `podman-auto-update.timer` per user, `auto-reboot-staged.timer` for rpm-ostree |
 | Firewall | firewalld: ssh, http, https only; `ip_unprivileged_port_start=80` |
 

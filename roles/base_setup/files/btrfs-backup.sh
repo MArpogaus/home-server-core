@@ -32,9 +32,9 @@ for src in "${SNAP_DIR}"/*/; do
         # Newest snapshot present on both sides is the incremental parent.
         parent="$(comm -12 <(snapshots "${src}") <(snapshots "${DEST}/${svc}") | tail -n1)"
         if [ -n "${parent}" ]; then
-            btrfs send -q -p "${src}/${parent}" "${src}/${latest}" | btrfs receive "${DEST}/${svc}"
+            btrfs send -q -p "${src}${parent}" "${src}${latest}" | btrfs receive "${DEST}/${svc}"
         else
-            btrfs send -q "${src}/${latest}" | btrfs receive "${DEST}/${svc}"
+            btrfs send -q "${src}${latest}" | btrfs receive "${DEST}/${svc}"
         fi
         echo "Backed up ${svc}/${latest}"
     fi

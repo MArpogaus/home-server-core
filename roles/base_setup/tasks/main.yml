@@ -76,7 +76,6 @@
 - name: Build SELinux file context targets
   ansible.builtin.set_fact:
     base_setup_selinux_targets:
-      - "{{ base_setup_services_dir }}/snapshots(/.*)?"
       - "{{ base_setup_services_dir }}(/.*)?"
 
 - name: Install SELinux file context rules
@@ -187,7 +186,6 @@
       net.ipv4.ip_unprivileged_port_start=80
     dest: /etc/sysctl.d/90-unprivileged-port-start.conf
     mode: "0644"
-  register: base_setup_sysctl_config
   notify: Apply sysctl setting
 
 - name: Deploy off-box backup script
