@@ -72,6 +72,14 @@ def parse_args(argv=None):
                         help="grow the disk image to this size (default: %(default)s)")
     parser.add_argument("--ssh-port", default=2222, type=int, metavar="PORT",
                         help="host port forwarded to the guest's SSH (default: %(default)s)")
+    # Unprivileged by default so the forward never collides with a web server
+    # on the host and needs no root. Bunkerweb rejects requests whose SNI or
+    # Host matches no configured site, so reach it by name:
+    #   curl -k --resolve <server_name>:8443:127.0.0.1 https://<server_name>/
+    parser.add_argument("--http-port", default=8080, type=int, metavar="PORT",
+                        help="host port forwarded to the guest's 80 (default: %(default)s)")
+    parser.add_argument("--https-port", default=8443, type=int, metavar="PORT",
+                        help="host port forwarded to the guest's 443 (default: %(default)s)")
     return parser.parse_args(argv)
 
 
@@ -195,6 +203,7 @@ def print_banner(args):
 {'=' * 50}
 
   SSH:   ssh -p {args.ssh_port} -i {SSH_KEY} core@localhost
+  HTTP:  localhost:{args.http_port}   HTTPS: localhost:{args.https_port}
   Stop:  Ctrl+C
 
 {hint}
@@ -210,7 +219,12 @@ def boot(args, ignition_args):
         "-smp", args.cpus,
         "-drive", f"file={DISK},format=qcow2,if=virtio",
         *ignition_args,
-        "-netdev", f"user,id=net0,hostfwd=tcp::{args.ssh_port}-:22",
+        "-netdev", ",".join([
+            "user", "id=net0",
+            f"hostfwd=tcp::{args.ssh_port}-:22",
+            f"hostfwd=tcp::{args.http_port}-:80",
+            f"hostfwd=tcp::{args.https_port}-:443",
+        ]),
         "-device", "virtio-net-pci,netdev=net0",
         "-display", "none",
         "-serial", "mon:stdio",
