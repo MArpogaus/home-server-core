@@ -39,3 +39,24 @@ base_setup_firewall_services:
 # A mounted second Btrfs filesystem. Empty disables the backup.
 base_setup_backup_dir: ""
 base_setup_backup_retention_days: 90
+
+# iSCSI LUN as the backup target. Empty portal disables all of it and leaves
+# base_setup_backup_dir to be mounted by other means. See README.md.
+# Set either base_setup_iscsi_portal (iSCSI LUN) or base_setup_backup_device
+# (any local block device). Both empty leaves the whole subsystem off.
+base_setup_backup_device: ""
+base_setup_iscsi_portal: ""
+base_setup_iscsi_target: ""
+base_setup_iscsi_lun: 0
+base_setup_iscsi_initiator: "iqn.2026-01.local.homeserver:t630"
+base_setup_iscsi_chap_user: ""
+base_setup_iscsi_chap_password: ""
+base_setup_iscsi_device: >-
+  /dev/disk/by-path/ip-{{ base_setup_iscsi_portal }}:3260-iscsi-{{ base_setup_iscsi_target }}-lun-{{ base_setup_iscsi_lun }}
+# Erases the LUN. Only acts on a device with no signature at all.
+base_setup_iscsi_format: false
+base_setup_luks_name: backup
+base_setup_luks_keyfile: /etc/luks/backup.key
+# Required when the portal is set. Keep a copy off this machine: without it the
+# backup cannot be read.
+base_setup_luks_passphrase: ""

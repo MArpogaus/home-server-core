@@ -1,0 +1,189 @@
+---
+# Block device -> LUKS -> Btrfs, mounted at base_setup_backup_dir.
+# The device is an iSCSI LUN when a portal is set, otherwise whatever
+# base_setup_backup_device names.
+
+- name: Resolve the backup block device
+  ansible.builtin.set_fact:
+    base_setup_device: >-
+      {{ base_setup_backup_device if base_setup_backup_device | length > 0
+         else base_setup_iscsi_device }}
+
+- name: Assert a LUKS passphrase is set
+  ansible.builtin.assert:
+    that: base_setup_luks_passphrase | length > 0
+    fail_msg: >-
+      base_setup_luks_passphrase is empty. Set it in secrets/vars.yml and keep
+      a copy off this machine: without it the backup cannot be read.
+
+- name: Assert the iSCSI and LUKS tooling is present
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ ['/usr/bin/cryptsetup'] + (['/usr/bin/iscsiadm'] if base_setup_iscsi_portal | length > 0 else []) }}"
+  register: base_setup_iscsi_tools
+  failed_when: not base_setup_iscsi_tools.stat.exists
+
+- name: Set the iSCSI initiator name
+  ansible.builtin.copy:
+    content: "InitiatorName={{ base_setup_iscsi_initiator }}\n"
+    dest: /etc/iscsi/initiatorname.iscsi
+    owner: root
+    mode: '0600'
+  notify: Restart iscsid
+  when: base_setup_iscsi_portal | length > 0
+
+- name: Enable iscsid
+  ansible.builtin.systemd:
+    name: iscsid.service
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: base_setup_iscsi_portal | length > 0
+
+- name: Apply the initiator name now
+  ansible.builtin.meta: flush_handlers
+
+- name: Check whether the target is already discovered
+  ansible.builtin.stat:
+    path: "/var/lib/iscsi/nodes/{{ base_setup_iscsi_target }}"
+  register: base_setup_iscsi_node
+  when: base_setup_iscsi_portal | length > 0
+
+- name: Discover the iSCSI target
+  ansible.builtin.command:
+    cmd: iscsiadm -m discovery -t sendtargets -p {{ base_setup_iscsi_portal }}
+  when:
+    - base_setup_iscsi_portal | length > 0
+    - not base_setup_iscsi_node.stat.exists
+  changed_when: true
+
+- name: Configure CHAP on the target
+  ansible.builtin.command:
+    cmd: >-
+      iscsiadm -m node -T {{ base_setup_iscsi_target }} -p {{ base_setup_iscsi_portal }}
+      --op=update -n {{ item.key }} -v {{ item.value }}
+  loop:
+    - {key: node.session.auth.authmethod, value: CHAP}
+    - {key: node.session.auth.username, value: "{{ base_setup_iscsi_chap_user }}"}
+    - {key: node.session.auth.password, value: "{{ base_setup_iscsi_chap_password }}"}
+  loop_control:
+    label: "{{ item.key }}"
+  when: base_setup_iscsi_chap_user | length > 0
+  changed_when: false   # enforcement: iscsiadm cannot report whether it differed
+  no_log: true
+
+- name: Log in to the target at boot
+  ansible.builtin.command:
+    cmd: >-
+      iscsiadm -m node -T {{ base_setup_iscsi_target }} -p {{ base_setup_iscsi_portal }}
+      --op=update -n node.startup -v automatic
+  changed_when: false
+  when: base_setup_iscsi_portal | length > 0
+
+- name: Check for an open session
+  ansible.builtin.command: iscsiadm -m session
+  register: base_setup_iscsi_session
+  changed_when: false
+  failed_when: false
+  when: base_setup_iscsi_portal | length > 0
+
+- name: Log in to the iSCSI target
+  ansible.builtin.command:
+    cmd: iscsiadm -m node -T {{ base_setup_iscsi_target }} -p {{ base_setup_iscsi_portal }} --login
+  when:
+    - base_setup_iscsi_portal | length > 0
+    - base_setup_iscsi_target not in base_setup_iscsi_session.stdout
+  changed_when: true
+
+- name: Wait for the LUN to appear
+  ansible.builtin.wait_for:
+    path: "{{ base_setup_device }}"
+    timeout: 60
+  when: base_setup_iscsi_portal | length > 0
+
+- name: Ensure the LUKS key directory exists
+  ansible.builtin.file:
+    path: "{{ base_setup_luks_keyfile | dirname }}"
+    state: directory
+    owner: root
+    mode: '0700'
+
+- name: Install the LUKS key file
+  ansible.builtin.copy:
+    content: "{{ base_setup_luks_passphrase }}"
+    dest: "{{ base_setup_luks_keyfile }}"
+    owner: root
+    mode: '0400'
+  no_log: true
+
+- name: Read the LUN signature
+  ansible.builtin.command: blkid -p -o value -s TYPE {{ base_setup_device }}
+  register: base_setup_lun_type
+  changed_when: false
+  failed_when: false
+
+# Formatting erases the LUN, so it needs both an explicit opt-in and a device
+# that carries no signature at all.
+- name: Refuse to format a LUN that already holds data
+  ansible.builtin.fail:
+    msg: >-
+      {{ base_setup_device }} already holds a
+      '{{ base_setup_lun_type.stdout }}' signature. Set
+      base_setup_iscsi_format to false, or erase the LUN by hand first.
+  when:
+    - base_setup_iscsi_format | bool
+    - base_setup_lun_type.stdout | length > 0
+    - base_setup_lun_type.stdout != 'crypto_LUKS'
+
+- name: Format the LUN as LUKS
+  ansible.builtin.command:
+    cmd: >-
+      cryptsetup luksFormat --batch-mode --type luks2
+      {{ base_setup_device }} {{ base_setup_luks_keyfile }}
+  when:
+    - base_setup_iscsi_format | bool
+    - base_setup_lun_type.stdout | length == 0
+  changed_when: true
+
+- name: Register the LUKS device in crypttab
+  ansible.builtin.lineinfile:
+    path: /etc/crypttab
+    regexp: "^{{ base_setup_luks_name }}\\s"
+    line: >-
+      {{ base_setup_luks_name }} {{ base_setup_device }}
+      {{ base_setup_luks_keyfile }} luks,_netdev,nofail
+    create: true
+    owner: root
+    mode: '0600'
+  notify: Reload systemd for crypttab
+
+- name: Apply the crypttab change now
+  ansible.builtin.meta: flush_handlers
+
+- name: Open the LUKS device
+  ansible.builtin.command:
+    cmd: >-
+      cryptsetup open --key-file {{ base_setup_luks_keyfile }}
+      {{ base_setup_device }} {{ base_setup_luks_name }}
+    creates: "/dev/mapper/{{ base_setup_luks_name }}"
+
+- name: Read the filesystem signature
+  ansible.builtin.command: blkid -p -o value -s TYPE /dev/mapper/{{ base_setup_luks_name }}
+  register: base_setup_fs_type
+  changed_when: false
+  failed_when: false
+
+- name: Create the Btrfs filesystem
+  ansible.builtin.command: mkfs.btrfs -L backup /dev/mapper/{{ base_setup_luks_name }}
+  when:
+    - base_setup_iscsi_format | bool
+    - base_setup_fs_type.stdout | length == 0
+  changed_when: true
+
+- name: Mount the backup target
+  ansible.posix.mount:
+    path: "{{ base_setup_backup_dir }}"
+    src: "/dev/mapper/{{ base_setup_luks_name }}"
+    fstype: btrfs
+    opts: _netdev,nofail,noatime
+    state: mounted

@@ -67,6 +67,47 @@ Service repos are siblings: `../service-nextcloud`, `../service-bunker`,
 Each service gets a subvolume, user, subuid range, SELinux label, linger,
 snapshot timer and auto-update timer automatically.
 
+## Backup target (iSCSI + LUKS)
+
+`base_setup_backup_dir` can be an encrypted iSCSI LUN instead of a USB disk.
+The role logs in to the target, opens the LUKS device and mounts it. The backup
+script itself is unchanged: it still does incremental `btrfs send`.
+
+```yaml
+base_setup_iscsi_portal: "192.168.0.50"
+base_setup_iscsi_target: "iqn.2015-04.com.wdc:ex2ultra.backup"
+base_setup_iscsi_chap_user: "t630"
+base_setup_iscsi_chap_password: "<chap secret>"
+base_setup_luks_passphrase: "<passphrase>"
+base_setup_backup_dir: /var/backup
+```
+
+Set `base_setup_backup_device` instead of the portal to encrypt a local disk.
+
+CAUTION: Keep `base_setup_luks_passphrase` somewhere other than this machine.
+Without it the backup cannot be read, which matters most when this machine is
+the thing that failed.
+
+### First use
+
+The role never erases a device that carries a signature. To format a new and
+empty LUN, run one deploy with `base_setup_iscsi_format=true`. The run stops
+with an error if the device holds anything.
+
+```bash
+ansible-playbook ... -e base_setup_iscsi_format=true
+```
+
+Then remove the flag. The device is found by path, so it survives a reboot
+through `/etc/crypttab` and `/etc/fstab`, both with `_netdev,nofail`.
+
+### Staleness
+
+The backup treats an absent target as a skip and exits 0, so a failure alert
+never fires for a disk that is not there. `BackupStale` in `service-monitoring`
+covers that: it alerts when the job has not logged a completed run for 48
+hours, and stays quiet on a host that runs no backup.
+
 ## Variables
 
 | Var | Default |
@@ -78,6 +119,10 @@ snapshot timer and auto-update timer automatically.
 | `base_setup_btrfs_snapshot_schedule` | `daily` |
 | `base_setup_backup_dir` | `""` (disabled) |
 | `base_setup_backup_retention_days` | 90 |
+| `base_setup_iscsi_portal` / `_target` | `""` (no iSCSI) |
+| `base_setup_backup_device` | `""` (local disk instead of iSCSI) |
+| `base_setup_iscsi_format` | `false` (never erases by default) |
+| `base_setup_luks_passphrase` | required when a backup device is set |
 | `base_setup_firewall_services` | ssh, http, https |
 
 ## Test VM

@@ -211,6 +211,10 @@
     mode: "0644"
   notify: Apply sysctl setting
 
+- name: Set up the iSCSI backup target
+  ansible.builtin.include_tasks: backup_target.yml
+  when: base_setup_iscsi_portal | length > 0 or base_setup_backup_device | length > 0
+
 - name: Deploy off-box backup script
   ansible.builtin.copy:
     src: btrfs-backup.sh

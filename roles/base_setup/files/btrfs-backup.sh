@@ -47,3 +47,7 @@ for src in "${SNAP_DIR}"/*/; do
         fi
     done
 done
+
+# The staleness alert keys on this line. It is only reached when the target
+# was mounted and every service was processed.
+echo "btrfs-backup: run complete"
