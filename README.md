@@ -93,15 +93,7 @@ See `test/README.md`. The playbook is deployed against it from
 
 ## Development
 
-```bash
-pre-commit install --install-hooks -t pre-commit -t commit-msg -t pre-push
-```
-
-Plain `pre-commit install` wires up only the pre-commit stage, so the
-commitizen message and branch checks stay dormant. Hooks: shellcheck,
-ansible-lint (which owns YAML style here), commitizen for conventional commits.
-CI runs the same set on push and pull request. Actions are pinned to SHAs, and
-dependabot updates actions and hook revisions weekly against `dev`.
+Read [AGENTS.md](../AGENTS.md) for the hook setup and the branch rules.
 
 ## License
 

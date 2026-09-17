@@ -1,15 +1,10 @@
 ---
-# Subuid/subgid range size for rootless podman
 base_setup_subuid_range_size: 65536
 
-# Start of a service's subuid/subgid range. Derived from its UID, so it is
-# stable when services are added or removed, and collision-free because UIDs
-# are unique. Evaluated lazily inside the loops (uses `item`).
+# Lazy: uses `item`, so it is evaluated inside the loops.
 base_setup_subuid_start: "{{ item.uid | int * base_setup_subuid_range_size + 100000 }}"
 
-# Service definitions — each must have name, uid, and role.
-# Optional: groups (extra host groups for the service user).
-# Override uid per service with e.g. nextcloud_uid in secrets.
+# Keys: name, uid, role, repo. Optional: groups.
 base_setup_services:
   - name: nextcloud
     uid: "{{ nextcloud_uid | default(82) }}"
@@ -25,26 +20,22 @@ base_setup_services:
     repo: monitoring
     groups: [systemd-journal] # Alloy reads the host journal
 
-# Extra services, appended to the list above. Set this in secrets/vars.yml to
-# add a service without restating the built-in three.
+# Appended to the list above. Set this in secrets/vars.yml.
 base_setup_extra_services: []
-# Root directory for service data (subvolumes, home dirs)
-base_setup_services_dir: /var/services
 
-# Path prefix for service repos (services are at <path>/service-<name>)
+base_setup_services_dir: /var/services
+# Repos are at <path>/service-<repo>.
 base_setup_services_path: ..
 
-# Snapshot settings
 base_setup_btrfs_snapshot_dir: /var/services/snapshots
 base_setup_btrfs_snapshot_retention_days: 30
 base_setup_btrfs_snapshot_schedule: daily
 
-# Firewall services opened to the outside world
 base_setup_firewall_services:
   - ssh
   - http
   - https
 
-# Off-box backup: a mounted second Btrfs filesystem (USB disk). Empty = disabled.
+# A mounted second Btrfs filesystem. Empty disables the backup.
 base_setup_backup_dir: ""
 base_setup_backup_retention_days: 90

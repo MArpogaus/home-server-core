@@ -1,6 +1,4 @@
 ---
-# Ignition creates /var as Btrfs partition
-# Ansible creates subvolumes under /var/services/
 
 - name: Merge built-in and extra service definitions
   ansible.builtin.set_fact:
@@ -90,8 +88,7 @@
     cmd: restorecon -Rv {{ base_setup_services_dir }}/{{ item.name }}
   loop: "{{ base_setup_all_services }}"
   register: base_setup_restorecon
-  # restorecon prints one line per file it relabels, so silence means nothing
-  # needed changing. Without this the play reports a change on every run.
+  # restorecon prints one line per relabelled file, so silence means no change.
   changed_when: base_setup_restorecon.stdout != ''
 
 - name: Deploy snapshot service template
@@ -112,8 +109,7 @@
     dest: /usr/local/bin/btrfs-snapshot-cleanup.sh
     mode: "0755"
 
-# daemon_reload here, not at the end: these unit files are new on a first run
-# and systemd cannot enable a unit it has not seen yet.
+# daemon_reload here, not at the end: a first run enables a brand-new unit.
 - name: Enable and start snapshot timers for each service
   ansible.builtin.systemd:
     name: btrfs-snapshot@{{ item.name }}.timer
@@ -170,10 +166,8 @@
     state: started
     enabled: true
 
-# ansible.posix.firewalld applies the rule to the running firewall and to the
-# permanent config in one step. `firewall-cmd --reload` is deliberately avoided:
-# it rebuilds the nftables ruleset and wedges the SSH connection Ansible is
-# running over, hanging the play.
+# No `firewall-cmd --reload`: it rebuilds the nftables ruleset and wedges the
+# SSH connection that Ansible runs over. This module needs no reload.
 - name: Configure firewall to allow SSH, HTTP, and HTTPS only
   ansible.posix.firewalld:
     service: "{{ item }}"

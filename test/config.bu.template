@@ -31,6 +31,8 @@ storage:
           MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE54diWpeKbUOvhecp64Oe5XOB9VHX
           bCvOPDIIzZz0XNJsln4vVsWiHUMU+GIM20/4ohFk0rNx35l41G8+4vdhAQ==
           -----END PUBLIC KEY-----
+    # Gates the signed rebase below. securecore's own policy.json replaces
+    # this one afterwards, and install_secureblue.sh merges our key into that.
     - path: /etc/containers/policy.json
       mode: 0644
       overwrite: true

@@ -1,8 +1,4 @@
 ---
-# SecureBlue Deployment Playbook
-# Service list and paths live in roles/base_setup/defaults/main.yml;
-# override per deployment in secrets/vars.yml.
-
 - name: Full deployment — base setup, services, and startup
   hosts: all
   gather_facts: true

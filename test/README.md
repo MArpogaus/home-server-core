@@ -16,7 +16,7 @@ python3 start_vm.py --help      # all options
 The guest gets 8 GB and 2 vCPUs by default, matching the target thin client.
 Override with `--memory` and `--cpus`. Sizing it below the real hardware makes
 a from-scratch start, which pulls every image while starting every container,
-fail under memory pressure the real box would never see.
+fail under memory pressure that the real box never sees.
 
 Then, from `deployment-private/`:
 
@@ -50,13 +50,13 @@ python3 start_vm.py --save-base
 ```
 
 The VM must be shut down. `qemu-img` refuses to write a snapshot into a disk
-QEMU still has open, and a snapshot taken mid-rebase would capture a broken
+QEMU still has open, and a snapshot taken mid-rebase captures a broken
 state. Re-running `--save-base` replaces the existing snapshot.
 
 This is a qcow2 internal snapshot: it lives inside `fcos.qcow2`, costs only the
 blocks that change afterwards, and needs no second image or backing-file chain.
-On `--restore` the Ignition config is not regenerated, because Ignition only
-runs on a first boot and would be ignored.
+On `--restore` the Ignition config is not regenerated, because Ignition runs
+on a first boot only.
 
 ## What start_vm.py does
 

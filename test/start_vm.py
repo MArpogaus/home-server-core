@@ -61,9 +61,7 @@ def parse_args(argv=None):
     mode.add_argument("--save-base", action="store_true",
                       help=f'tag the current disk state "{BASE_SNAPSHOT}" '
                            "(the VM must be shut down) and exit")
-    # The target is an 8 GB thin client. Matching it here means a from-scratch
-    # start, which pulls every image while starting every container, is not
-    # tested under memory pressure the real box would never see.
+    # Match the 8 GB target, so a cold start is not tested under false pressure.
     parser.add_argument("--memory", default="8192", metavar="MB",
                         help="guest RAM in MB (default: %(default)s)")
     parser.add_argument("--cpus", default="2", metavar="N",
@@ -72,9 +70,7 @@ def parse_args(argv=None):
                         help="grow the disk image to this size (default: %(default)s)")
     parser.add_argument("--ssh-port", default=2222, type=int, metavar="PORT",
                         help="host port forwarded to the guest's SSH (default: %(default)s)")
-    # Unprivileged by default so the forward never collides with a web server
-    # on the host and needs no root. Bunkerweb rejects requests whose SNI or
-    # Host matches no configured site, so reach it by name:
+    # Unprivileged, so the forward needs no root. Bunkerweb needs the real name:
     #   curl -k --resolve <server_name>:8443:127.0.0.1 https://<server_name>/
     parser.add_argument("--http-port", default=8080, type=int, metavar="PORT",
                         help="host port forwarded to the guest's 80 (default: %(default)s)")
@@ -138,8 +134,7 @@ def render_butane_config():
     with open(SSH_KEY + ".pub") as handle:
         pubkey = handle.read().strip()
 
-    # The password is only for the serial console; FCOS gives wheel passwordless
-    # sudo, so it is optional. Without mkpasswd, boot key-only rather than fail.
+    # Serial console only, so it is optional. Without mkpasswd, boot key-only.
     if shutil.which("mkpasswd"):
         password = os.environ.get("VM_PASSWORD", "test")
         pw_hash = subprocess.run(["mkpasswd", "--method=yescrypt", password],
@@ -248,8 +243,7 @@ def main(argv=None):
     ensure_disk(args.fresh, args.disk_size)
 
     if args.restore:
-        # The disk is already provisioned and Ignition, which only runs on first
-        # boot, would ignore the config anyway.
+        # Ignition runs on first boot only, so it would ignore the config.
         ignition_args = []
     else:
         build_ignition()
