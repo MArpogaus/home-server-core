@@ -10,18 +10,32 @@
     state: directory
     mode: "0755"
 
-- name: Create Btrfs subvolumes for each service
-  ansible.builtin.command:
-    cmd: btrfs subvolume create {{ base_setup_services_dir }}/{{ item.name }}
-    creates: "{{ base_setup_services_dir }}/{{ item.name }}"
+# `creates:` alone is not enough: the command module still returns rc 0 with a
+# "Did not run command" message, so a blanket changed_when reports a change on
+# every run. Select the missing ones instead, then changed_when is honest.
+- name: Check which Btrfs subvolumes exist
+  ansible.builtin.stat:
+    path: "{{ base_setup_services_dir }}/{{ item.name }}"
   loop: "{{ base_setup_all_services }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: base_setup_subvol_stat
+
+- name: Create the missing Btrfs subvolumes
+  ansible.builtin.command:
+    cmd: btrfs subvolume create {{ base_setup_services_dir }}/{{ item.item.name }}
+  loop: "{{ base_setup_subvol_stat.results | rejectattr('stat.exists') | list }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  register: base_setup_subvol_created
   changed_when: true
 
 - name: Create Btrfs subvolume for snapshots
   ansible.builtin.command:
     cmd: btrfs subvolume create {{ base_setup_btrfs_snapshot_dir }}
     creates: "{{ base_setup_btrfs_snapshot_dir }}"
-  changed_when: true
+  register: base_setup_snapshot_subvol
+  changed_when: "'Did not run command' not in base_setup_snapshot_subvol.msg"
 
 - name: Create service users (non-login, system)
   ansible.builtin.user:
@@ -82,14 +96,26 @@
     setype: container_file_t
     state: present
   loop: "{{ base_setup_selinux_targets }}"
+  register: base_setup_sefcontext
 
+# Only when the rule is new or the subvolume is new. `restorecon -R` walks the
+# whole tree, which is the entire Nextcloud data directory on a real host.
+# Files created later inherit the type from their parent, and podman relabels
+# what it mounts with :z and :Z.
 - name: Apply SELinux labels
   ansible.builtin.command:
     cmd: restorecon -Rv {{ base_setup_services_dir }}/{{ item.name }}
   loop: "{{ base_setup_all_services }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: >-
+    base_setup_sefcontext is changed
+    or item.name in (base_setup_subvol_created.results | default([])
+                     | map(attribute='item.item.name') | list)
   register: base_setup_restorecon
-  # restorecon prints one line per relabelled file, so silence means no change.
-  changed_when: base_setup_restorecon.stdout != ''
+  # "not reset as customized by admin" is printed on every run and relabels
+  # nothing, so only a real relabel counts as a change.
+  changed_when: "'Relabeled' in base_setup_restorecon.stdout | default('')"
 
 - name: Deploy snapshot service template
   ansible.builtin.template:
