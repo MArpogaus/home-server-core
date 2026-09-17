@@ -32,13 +32,43 @@
   notify: Restart iscsid
   when: base_setup_iscsi_portal | length > 0
 
+# `semanage permissive -a` exits 0 even when the domain is already permissive,
+# so it has to be read first or every run reports a change.
+- name: Read the permissive SELinux domains
+  ansible.builtin.command: semanage permissive -l
+  when:
+    - base_setup_iscsi_portal | length > 0
+    - base_setup_iscsi_selinux_permissive | bool
+  register: base_setup_permissive_list
+  changed_when: false
+
+- name: Make iscsid a permissive SELinux domain
+  ansible.builtin.command: semanage permissive -a iscsid_t
+  when:
+    - base_setup_iscsi_portal | length > 0
+    - base_setup_iscsi_selinux_permissive | bool
+    - "'iscsid_t' not in base_setup_permissive_list.stdout | default('')"
+  changed_when: true
+
 - name: Enable iscsid
-  ansible.builtin.systemd:
-    name: iscsid.service
-    enabled: true
-    state: started
-    daemon_reload: true
   when: base_setup_iscsi_portal | length > 0
+  block:
+    - name: Start iscsid
+      ansible.builtin.systemd:
+        name: iscsid.service
+        enabled: true
+        state: started
+        daemon_reload: true
+  rescue:
+    - name: Explain why iscsid did not start
+      ansible.builtin.fail:
+        msg: >-
+          iscsid did not start. On SecureBlue this is SELinux: iscsid_t is
+          denied create and bind on netlink_iscsi_socket, and a targeted allow
+          rule does not help. Check with
+          `ausearch -m AVC -c iscsid`. Set base_setup_iscsi_selinux_permissive
+          to true to make iscsid a permissive domain, or back up over NFS or
+          SMB instead, which needs no policy change.
 
 - name: Apply the initiator name now
   ansible.builtin.meta: flush_handlers

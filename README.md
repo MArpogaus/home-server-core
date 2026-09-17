@@ -88,6 +88,33 @@ CAUTION: Keep `base_setup_luks_passphrase` somewhere other than this machine.
 Without it the backup cannot be read, which matters most when this machine is
 the thing that failed.
 
+### SELinux blocks iSCSI on SecureBlue
+
+iscsid does not start under the stock policy:
+
+```
+iscsid: can not create NETLINK_ISCSI socket [Permission denied]
+avc: denied { create } for comm="iscsid"
+  scontext=...:iscsid_t:s0 tclass=netlink_iscsi_socket
+```
+
+The class and both permissions exist in the policy, and `deny_unknown` is 0,
+but a local allow rule for exactly `iscsid_t self:netlink_iscsi_socket
+{ create bind }` installs and has no effect. That was tested and repeated.
+Only a permissive domain works:
+
+```yaml
+base_setup_iscsi_selinux_permissive: true
+```
+
+This stops SELinux enforcing iscsid alone. Every other domain stays enforcing,
+and denials for iscsid are still logged. It is weaker than the stock policy,
+so it is off by default and the role fails with an explanation instead of
+turning it on by itself.
+
+A backup over NFS or SMB needs no policy change. That is the alternative if
+you would rather not relax the policy for iscsid.
+
 ### First use
 
 The role never erases a device that carries a signature. To format a new and

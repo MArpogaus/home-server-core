@@ -49,6 +49,12 @@ base_setup_iscsi_portal: ""
 base_setup_iscsi_target: ""
 base_setup_iscsi_lun: 0
 base_setup_iscsi_initiator: "iqn.2026-01.local.homeserver:t630"
+# SecureBlue's SELinux policy denies iscsid_t the create and bind permissions
+# on its own netlink_iscsi_socket, so iscsid cannot start. A targeted allow
+# rule has no effect (tested). Only a permissive domain works, which stops
+# SELinux enforcing iscsid alone while the rest of the system stays enforcing.
+# Read "Backup target" in README.md before you turn this on.
+base_setup_iscsi_selinux_permissive: false
 base_setup_iscsi_chap_user: ""
 base_setup_iscsi_chap_password: ""
 base_setup_iscsi_device: >-
