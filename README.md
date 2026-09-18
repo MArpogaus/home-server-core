@@ -177,8 +177,12 @@ and writes the result:
 cd ansible-base/ignition
 ./build.sh ign                       # render config.ign only
 ./build.sh install /dev/sdX          # install Fedora CoreOS onto that disk
-./build.sh iso fedora-coreos-live.iso
+./build.sh iso fedora-coreos-live.iso /dev/sda
 ```
+
+`install` writes to a disk attached to this machine. `iso` writes `t630.iso`,
+which installs onto the named device of the *target* machine and reboots, with
+no prompt. Name the disk as the t630 sees it.
 
 It authorises the smartcard key from your SSH agent, the one whose comment
 carries `cardno:`. Set `SSH_PUBLIC_KEY` to authorise a different key. It then

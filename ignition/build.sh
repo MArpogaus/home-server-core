@@ -5,7 +5,7 @@
 #
 #   ./build.sh ign                      only render config.ign
 #   ./build.sh install /dev/sdX         install Fedora CoreOS onto that disk
-#   ./build.sh iso fedora-coreos.iso    write a customised installer ISO
+#   ./build.sh iso <live.iso> /dev/sdX  write an unattended installer ISO
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -59,17 +59,20 @@ install)
 		install "${DEVICE}" -i config.ign
 	;;
 iso)
-	SRC_ISO="${2:?usage: $0 iso fedora-coreos-live.iso}"
-	OUT_ISO="${HERE}/t630.iso"
-	sudo podman run --pull=always --privileged --rm \
-		-v /dev:/dev -v /run/udev:/run/udev -v "${HERE}":/data -w /data \
+	SRC_ISO="${2:?usage: $0 iso <live.iso> <target-device>}"
+	DEVICE="${3:?usage: $0 iso <live.iso> <target-device>}"
+	SRC_DIR="$(cd "$(dirname "${SRC_ISO}")" && pwd)"
+	# No privileges and no /dev here: this only rewrites a file.
+	podman run --pull=always --rm \
+		-v "${HERE}":/data:z -v "${SRC_DIR}":/iso:z -w /data \
 		"${INSTALLER_IMAGE}" \
-		iso customize --dest-ignition config.ign \
-		--dest-device /dev/disk/by-id/REPLACE-ME \
-		-o "$(basename "${OUT_ISO}")" "$(basename "${SRC_ISO}")"
-	echo "Wrote ${OUT_ISO}"
+		iso customize --force --dest-ignition config.ign \
+		--dest-device "${DEVICE}" \
+		-o t630.iso "/iso/$(basename "${SRC_ISO}")"
+	echo "Wrote ${HERE}/t630.iso"
+	echo "Booting it installs onto ${DEVICE} and reboots, with no prompt."
 	;;
 *)
-	echo "usage: $0 [ign | install /dev/sdX | iso <live.iso>]"; exit 1
+	echo "usage: $0 [ign | install /dev/sdX | iso <live.iso> /dev/sdX]"; exit 1
 	;;
 esac
