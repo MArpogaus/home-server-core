@@ -6,6 +6,9 @@
 #   ./build.sh ign                      only render config.ign
 #   ./build.sh install /dev/sdX         install Fedora CoreOS onto that disk
 #   ./build.sh iso <live.iso> /dev/sdX  write an unattended installer ISO
+#
+# <live.iso> is the stock Fedora CoreOS live image. /dev/sdX is the disk of the
+# machine that will boot the ISO, not a disk of this one.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,11 +17,35 @@ BUTANE_CONFIG="${HERE}/config.bu"
 IGNITION="${HERE}/config.ign"
 INSTALLER_IMAGE="quay.io/coreos/coreos-installer:release"
 
-# The YubiKey is the only key that may log in. Override to use another.
-SSH_PUBLIC_KEY="${SSH_PUBLIC_KEY:-}"
+usage() { echo "usage: $0 [ign | install /dev/sdX | iso <live.iso> /dev/sdX]"; exit 1; }
+
+# The arguments are read first. Rendering costs a password prompt, and a
+# missing ISO must not be found out by the installer container.
+MODE="${1:-ign}"
+case "${MODE}" in
+ign) ;;
+install)
+	DEVICE="${2:-}"; [ -n "${DEVICE}" ] || usage
+	[ -b "${DEVICE}" ] || { echo "ERROR: ${DEVICE} is not a block device"; exit 1; }
+	;;
+iso)
+	SRC_ISO="${2:-}"; DEVICE="${3:-}"
+	[ -n "${SRC_ISO}" ] && [ -n "${DEVICE}" ] || usage
+	[ -f "${SRC_ISO}" ] || {
+		echo "ERROR: no such file: ${SRC_ISO}"
+		echo "       Fetch the live ISO into this directory first:"
+		echo "       podman run --rm -v \"${HERE}\":/data:z -w /data \\"
+		echo "           ${INSTALLER_IMAGE} download -s stable -p metal -f iso"
+		exit 1
+	}
+	;;
+*) usage ;;
+esac
 
 command -v butane >/dev/null || { echo "ERROR: butane not in PATH"; exit 1; }
 
+# The YubiKey is the only key that may log in. Override to use another.
+SSH_PUBLIC_KEY="${SSH_PUBLIC_KEY:-}"
 if [ -z "${SSH_PUBLIC_KEY}" ]; then
 	# Take the smartcard key from the agent: it is the one with a cardno.
 	SSH_PUBLIC_KEY="$(ssh-add -L 2>/dev/null | grep -m1 'cardno:' || true)"
@@ -45,11 +72,8 @@ envsubst '${SSH_PUBLIC_KEY} ${PASSWORD_HASH}' < "${TEMPLATE}" > "${BUTANE_CONFIG
 butane --pretty --strict "${BUTANE_CONFIG}" > "${IGNITION}"
 echo "Wrote ${IGNITION}"
 
-case "${1:-ign}" in
-ign)
-	;;
+case "${MODE}" in
 install)
-	DEVICE="${2:?usage: $0 install /dev/sdX}"
 	echo "CAUTION: this erases ${DEVICE}."
 	read -rp "Type the device again to confirm: " confirm
 	[ "${confirm}" = "${DEVICE}" ] || { echo "Aborted."; exit 1; }
@@ -59,8 +83,6 @@ install)
 		install "${DEVICE}" -i config.ign
 	;;
 iso)
-	SRC_ISO="${2:?usage: $0 iso <live.iso> <target-device>}"
-	DEVICE="${3:?usage: $0 iso <live.iso> <target-device>}"
 	SRC_DIR="$(cd "$(dirname "${SRC_ISO}")" && pwd)"
 	# No privileges and no /dev here: this only rewrites a file.
 	podman run --pull=always --rm \
@@ -71,8 +93,5 @@ iso)
 		-o t630.iso "/iso/$(basename "${SRC_ISO}")"
 	echo "Wrote ${HERE}/t630.iso"
 	echo "Booting it installs onto ${DEVICE} and reboots, with no prompt."
-	;;
-*)
-	echo "usage: $0 [ign | install /dev/sdX | iso <live.iso> /dev/sdX]"; exit 1
 	;;
 esac
