@@ -1,0 +1,4 @@
+# Backup target {{ item.name }}. Read by btrfs-backup.sh and the unit.
+LUKS_UUID={{ item.uuid }}
+BACKUP_ROOT={{ base_setup_backup_root }}
+RETENTION_DAYS={{ item.retention_days | default(base_setup_backup_retention_days) }}

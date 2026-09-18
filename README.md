@@ -35,7 +35,7 @@ lives in `roles/base_setup/defaults/main.yml`; override entries in
 | Users | System users, linger, optional extra `groups`; subuid/subgid range starts at `uid * 65536 + 100000`, so it is stable and collision-free |
 | SELinux | `container_file_t` on `/var/services` |
 | Snapshots | `btrfs-snapshot@<svc>.timer` (daily RO snapshot, retention by date in the name) |
-| Backup | `btrfs-backup.timer` (01:00): incremental `btrfs send` to `base_setup_backup_dir` when it is mounted |
+| Backup | `btrfs-backup@<target>.timer` (01:00): incremental `btrfs send` to each configured target that is present |
 | Memory | Swap on zram, sized `min(ram / 2, 4096)` |
 | Updates | `podman-auto-update.timer` per user, `auto-reboot-staged.timer` for rpm-ostree |
 | Firewall | firewalld: ssh, http, https only; `ip_unprivileged_port_start=80` |
@@ -67,26 +67,54 @@ Service repos are siblings: `../service-nextcloud`, `../service-bunker`,
 Each service gets a subvolume, user, subuid range, SELinux label, linger,
 snapshot timer and auto-update timer automatically.
 
-## Backup target (iSCSI + LUKS)
+## Backup targets
 
-`base_setup_backup_dir` can be an encrypted iSCSI LUN instead of a USB disk.
-The role logs in to the target, opens the LUKS device and mounts it. The backup
-script itself is unchanged: it still does incremental `btrfs send`.
+Every target is a LUKS container holding Btrfs, whether it is a USB disk or an
+iSCSI LUN on the NAS. One mechanism therefore covers all of them, and
+`btrfs send` stays unchanged.
 
 ```yaml
-base_setup_iscsi_portal: "192.168.0.50"
-base_setup_iscsi_target: "iqn.2015-04.com.wdc:ex2ultra.backup"
-base_setup_iscsi_chap_user: "t630"
-base_setup_iscsi_chap_password: "<chap secret>"
-base_setup_luks_passphrase: "<passphrase>"
-base_setup_backup_dir: /var/backup
+base_setup_luks_passphrase: "<one passphrase for every target>"
+base_setup_backup_targets:
+  - uuid: 7f3c8e2a-...      # UUID of the LUKS container
+    name: usb
+    retention_days: 30
+  - uuid: a91b4d17-...
+    name: nas
+    retention_days: 180
 ```
 
-Set `base_setup_backup_device` instead of the portal to encrypt a local disk.
+Targets are matched by the UUID of the LUKS container, so a disk keeps working
+after it moves to another port. `name` is used for the mount point, the unit
+instance and the alert.
+
+Each target gets:
+
+- a `crypttab` entry with `noauto`, so a missing disk never holds up the boot
+- `/var/backup/<name>` as an automount, unmounted again after five idle minutes
+- `btrfs-backup@<name>.timer` at 01:00, with its own retention
+
+Targets run independently. One absent disk does not stop another from being
+written.
 
 CAUTION: Keep `base_setup_luks_passphrase` somewhere other than this machine.
-Without it the backup cannot be read, which matters most when this machine is
-the thing that failed.
+One passphrase opens every target, and without it no backup can be read.
+
+### First use
+
+The role never erases a device that carries a signature. To prepare a new and
+empty iSCSI LUN, run one deploy with `base_setup_iscsi_format=true`. It formats
+the LUN and prints the UUID to put in `base_setup_backup_targets`. Then remove
+the flag.
+
+A local disk is prepared by hand once:
+
+```bash
+cryptsetup luksFormat --type luks2 /dev/sdX /etc/luks/backup.key
+cryptsetup open --key-file /etc/luks/backup.key /dev/sdX tmp
+mkfs.btrfs -L backup /dev/mapper/tmp && cryptsetup close tmp
+blkid -s UUID -o value /dev/sdX      # the value for the target list
+```
 
 ### SELinux blocks iSCSI on SecureBlue
 
@@ -112,28 +140,14 @@ and denials for iscsid are still logged. It is weaker than the stock policy.
 It is therefore off by default, and the role fails with an explanation rather
 than turn it on by itself.
 
-A backup over NFS or SMB needs no policy change. That is the alternative if
-you would rather not relax the policy for iscsid.
-
-### First use
-
-The role never erases a device that carries a signature. To format a new and
-empty LUN, run one deploy with `base_setup_iscsi_format=true`. The run stops
-with an error if the device holds anything.
-
-```bash
-ansible-playbook ... -e base_setup_iscsi_format=true
-```
-
-Then remove the flag. The device is found by path, so it survives a reboot
-through `/etc/crypttab` and `/etc/fstab`, both with `_netdev,nofail`.
+A USB target needs none of this, because it needs no iSCSI.
 
 ### Staleness
 
 The backup treats an absent target as a skip and exits 0, so a failure alert
 never fires for a disk that is not there. `BackupStale` in `service-monitoring`
-covers that. It alerts when the job has logged no completed run for 48 hours.
-It stays quiet on a host that runs no backup.
+covers that, per target. It alerts when one target has logged no completed run
+for 48 hours. It stays quiet for a host that runs no backup.
 
 ## Variables
 
@@ -144,13 +158,35 @@ It stays quiet on a host that runs no backup.
 | `base_setup_services_dir` | `/var/services` |
 | `base_setup_btrfs_snapshot_retention_days` | 30 |
 | `base_setup_btrfs_snapshot_schedule` | `daily` |
-| `base_setup_backup_dir` | `""` (disabled) |
-| `base_setup_backup_retention_days` | 90 |
+| `base_setup_backup_targets` | `[]` (no off-box backup) |
+| `base_setup_backup_root` | `/var/backup` |
+| `base_setup_backup_retention_days` | 90 (per-target fallback) |
 | `base_setup_iscsi_portal` / `_target` | `""` (no iSCSI) |
-| `base_setup_backup_device` | `""` (local disk instead of iSCSI) |
 | `base_setup_iscsi_format` | `false` (never erases by default) |
 | `base_setup_luks_passphrase` | required when a backup device is set |
 | `base_setup_firewall_services` | ssh, http, https |
+
+## Installing the real host
+
+`ignition/` holds one Butane template, used for the test VM and for the real
+hardware alike, so the two cannot drift apart. `ignition/build.sh` renders it
+and writes the result:
+
+```bash
+cd ansible-base/ignition
+./build.sh ign                       # render config.ign only
+./build.sh install /dev/sdX          # install Fedora CoreOS onto that disk
+./build.sh iso fedora-coreos-live.iso
+```
+
+It authorises the smartcard key from your SSH agent, the one whose comment
+carries `cardno:`. Set `SSH_PUBLIC_KEY` to authorise a different key. It then
+asks for a console password, which is for physical recovery: SSH refuses
+passwords either way.
+
+CAUTION: The installed host accepts that one key. Deploys therefore run with
+`SSH_AUTH_KEY=agent` and the token plugged in. The test VM keeps using
+`ssh/coreos_key`, which is the default.
 
 ## Test VM
 

@@ -36,15 +36,22 @@ base_setup_firewall_services:
   - http
   - https
 
-# A mounted second Btrfs filesystem. Empty disables the backup.
-base_setup_backup_dir: ""
+# Off-box backup targets. Every target is a LUKS container holding Btrfs, so
+# one mechanism covers a USB disk and a NAS LUN alike. Empty disables backups.
+# Each entry: uuid (of the LUKS container), name, optional retention_days.
+#   - uuid: 7f3c...
+#     name: usb
+#     retention_days: 30
+base_setup_backup_targets: []
+base_setup_backup_root: /var/backup
+# systemd unit names escape the mount path: /var/backup -> var-backup
+base_setup_backup_unit_prefix: "{{ base_setup_backup_root[1:] | replace('/', '-') }}"
+# Fallback when a target names no retention of its own.
 base_setup_backup_retention_days: 90
 
-# iSCSI LUN as the backup target. Empty portal disables all of it and leaves
-# base_setup_backup_dir to be mounted by other means. See README.md.
-# Set either base_setup_iscsi_portal (iSCSI LUN) or base_setup_backup_device
-# (any local block device). Both empty leaves the whole subsystem off.
-base_setup_backup_device: ""
+# iSCSI transport for a target that lives on a NAS. The LUN then appears as a
+# local block device, and is listed in base_setup_backup_targets like any
+# other. See README.md.
 base_setup_iscsi_portal: ""
 base_setup_iscsi_target: ""
 base_setup_iscsi_lun: 0
@@ -61,7 +68,6 @@ base_setup_iscsi_device: >-
   /dev/disk/by-path/ip-{{ base_setup_iscsi_portal }}:3260-iscsi-{{ base_setup_iscsi_target }}-lun-{{ base_setup_iscsi_lun }}
 # Erases the LUN. Only acts on a device with no signature at all.
 base_setup_iscsi_format: false
-base_setup_luks_name: backup
 base_setup_luks_keyfile: /etc/luks/backup.key
 # Required when the portal is set. Keep a copy off this machine: without it the
 # backup cannot be read.

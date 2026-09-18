@@ -1,0 +1,8 @@
+[Unit]
+Description=Backup target {{ item.name }}
+
+[Mount]
+What=/dev/mapper/backup-{{ item.name }}
+Where={{ base_setup_backup_root }}/{{ item.name }}
+Type=btrfs
+Options=noatime

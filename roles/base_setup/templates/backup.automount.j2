@@ -1,0 +1,11 @@
+[Unit]
+Description=Automount for backup target {{ item.name }}
+
+[Automount]
+Where={{ base_setup_backup_root }}/{{ item.name }}
+# Unmounted again when idle, so the disk can be unplugged and the NAS session
+# does not stay open all day.
+TimeoutIdleSec=300
+
+[Install]
+WantedBy=multi-user.target

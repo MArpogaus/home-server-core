@@ -17,7 +17,7 @@ TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 FCOS_VERSION = "44.20260510.3.1"
 DISK = os.path.join(TEST_DIR, "fcos.qcow2")
 DISK_XZ = DISK + ".xz"
-TEMPLATE = os.path.join(TEST_DIR, "config.bu.template")
+TEMPLATE = os.path.join(TEST_DIR, os.pardir, "ignition", "config.bu.template")
 BUTANE_CONFIG = os.path.join(TEST_DIR, "config.bu")
 IGNITION = os.path.join(TEST_DIR, "config.ign")
 # One key for everything: Ignition bakes in the pubkey, deploy/test scripts use

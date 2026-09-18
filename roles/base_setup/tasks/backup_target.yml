@@ -1,13 +1,11 @@
 ---
-# Block device -> LUKS -> Btrfs, mounted at base_setup_backup_dir.
-# The device is an iSCSI LUN when a portal is set, otherwise whatever
-# base_setup_backup_device names.
+# iSCSI transport for a backup target that lives on a NAS, plus the one-time
+# format of a blank LUN. Once formatted the LUN is an ordinary entry in
+# base_setup_backup_targets, mounted by the automount like any local disk.
 
 - name: Resolve the backup block device
   ansible.builtin.set_fact:
-    base_setup_device: >-
-      {{ base_setup_backup_device if base_setup_backup_device | length > 0
-         else base_setup_iscsi_device }}
+    base_setup_device: "{{ base_setup_iscsi_device }}"
 
 - name: Assert a LUKS passphrase is set
   ansible.builtin.assert:
@@ -175,45 +173,40 @@
     - base_setup_lun_type.stdout | length == 0
   changed_when: true
 
-- name: Register the LUKS device in crypttab
-  ansible.builtin.lineinfile:
-    path: /etc/crypttab
-    regexp: "^{{ base_setup_luks_name }}\\s"
-    line: >-
-      {{ base_setup_luks_name }} {{ base_setup_device }}
-      {{ base_setup_luks_keyfile }} luks,_netdev,nofail
-    create: true
-    owner: root
-    mode: '0600'
-  notify: Reload systemd for crypttab
-
-- name: Apply the crypttab change now
-  ansible.builtin.meta: flush_handlers
-
-- name: Open the LUKS device
+# Formatting opens the container once to lay down Btrfs inside it. After this
+# the LUN is listed in base_setup_backup_targets by its UUID and the automount
+# takes over.
+- name: Open the new LUKS container
   ansible.builtin.command:
     cmd: >-
       cryptsetup open --key-file {{ base_setup_luks_keyfile }}
-      {{ base_setup_device }} {{ base_setup_luks_name }}
-    creates: "/dev/mapper/{{ base_setup_luks_name }}"
+      {{ base_setup_device }} backup-format
+    creates: /dev/mapper/backup-format
+  when: base_setup_iscsi_format | bool
 
 - name: Read the filesystem signature
-  ansible.builtin.command: blkid -p -o value -s TYPE /dev/mapper/{{ base_setup_luks_name }}
+  ansible.builtin.command: blkid -p -o value -s TYPE /dev/mapper/backup-format
   register: base_setup_fs_type
   changed_when: false
   failed_when: false
+  when: base_setup_iscsi_format | bool
 
 - name: Create the Btrfs filesystem
-  ansible.builtin.command: mkfs.btrfs -L backup /dev/mapper/{{ base_setup_luks_name }}
+  ansible.builtin.command: mkfs.btrfs -L backup /dev/mapper/backup-format
   when:
     - base_setup_iscsi_format | bool
-    - base_setup_fs_type.stdout | length == 0
+    - base_setup_fs_type.stdout | default('') | length == 0
   changed_when: true
 
-- name: Mount the backup target
-  ansible.posix.mount:
-    path: "{{ base_setup_backup_dir }}"
-    src: "/dev/mapper/{{ base_setup_luks_name }}"
-    fstype: btrfs
-    opts: _netdev,nofail,noatime
-    state: mounted
+- name: Report the UUID to put in base_setup_backup_targets
+  ansible.builtin.command: blkid -s UUID -o value {{ base_setup_device }}
+  register: base_setup_new_uuid
+  changed_when: false
+  when: base_setup_iscsi_format | bool
+
+- name: Show the UUID of the formatted LUN
+  ansible.builtin.debug:
+    msg: >-
+      LUN formatted. Add this to base_setup_backup_targets:
+      uuid={{ base_setup_new_uuid.stdout | default('unknown') }}
+  when: base_setup_iscsi_format | bool
