@@ -1,8 +1,12 @@
 [Unit]
 Description=Incremental btrfs send of service snapshots to backup target %i
+# The automount has to satisfy this. An absent target therefore fails the unit
+# and shows up in the journal, rather than passing as a silent skip.
+RequiresMountsFor={{ base_setup_backup_root }}/%i
 
 [Service]
 Type=oneshot
 Environment=BTRFS_SNAPSHOT_DIR={{ base_setup_btrfs_snapshot_dir }}
+Environment=BACKUP_ROOT={{ base_setup_backup_root }}
 EnvironmentFile=/etc/btrfs-backup/%i.conf
 ExecStart=/usr/local/bin/btrfs-backup.sh %i

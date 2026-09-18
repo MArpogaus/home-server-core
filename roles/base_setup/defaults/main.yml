@@ -44,8 +44,6 @@ base_setup_firewall_services:
 #     retention_days: 30
 base_setup_backup_targets: []
 base_setup_backup_root: /var/backup
-# systemd unit names escape the mount path: /var/backup -> var-backup
-base_setup_backup_unit_prefix: "{{ base_setup_backup_root[1:] | replace('/', '-') }}"
 # Fallback when a target names no retention of its own.
 base_setup_backup_retention_days: 90
 

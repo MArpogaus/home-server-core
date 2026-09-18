@@ -257,16 +257,16 @@
   loop_control:
     label: "{{ item.name }}"
 
-# Found by UUID, so the entry survives a re-plug on a different port. noauto
-# because the automount below pulls it in, and a missing disk must never hold
-# up the boot.
+# Found by UUID, so the entry survives a re-plug on a different port. systemd
+# opens the container when the device appears; nofail keeps a missing disk from
+# holding up the boot.
 - name: Register each backup target in crypttab
   ansible.builtin.lineinfile:
     path: /etc/crypttab
     regexp: "^backup-{{ item.name }}\\s"
     line: >-
       backup-{{ item.name }} UUID={{ item.uuid }}
-      {{ base_setup_luks_keyfile }} luks,_netdev,nofail,noauto
+      {{ base_setup_luks_keyfile }} luks,_netdev,nofail
     create: true
     owner: root
     mode: "0600"
@@ -274,62 +274,25 @@
   loop_control:
     label: "{{ item.name }}"
 
-- name: Deploy the mount unit for each target
+# systemd generates the .mount and the .automount from this, so there is
+# nothing to template and nothing to enable. btrfs-backup@ pulls the mount in
+# when it runs, through RequiresMountsFor.
+- name: Mount each target on demand
+  ansible.posix.mount:
+    path: "{{ base_setup_backup_root }}/{{ item.name }}"
+    src: "/dev/mapper/backup-{{ item.name }}"
+    fstype: btrfs
+    opts: noauto,nofail,noatime,x-systemd.automount,x-systemd.idle-timeout=300
+    state: present
+  loop: "{{ base_setup_backup_targets }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify: Reload systemd for crypttab
+
+- name: Deploy the backup service template
   ansible.builtin.template:
-    src: backup.mount.j2
-    dest: "/etc/systemd/system/{{ base_setup_backup_unit_prefix }}-{{ item.name }}.mount"
+    src: btrfs-backup@.service.j2
+    dest: /etc/systemd/system/btrfs-backup@.service
     owner: root
     mode: "0644"
-  loop: "{{ base_setup_backup_targets }}"
-  loop_control:
-    label: "{{ item.name }}"
-
-- name: Deploy the automount unit for each target
-  ansible.builtin.template:
-    src: backup.automount.j2
-    dest: "/etc/systemd/system/{{ base_setup_backup_unit_prefix }}-{{ item.name }}.automount"
-    owner: root
-    mode: "0644"
-  loop: "{{ base_setup_backup_targets }}"
-  loop_control:
-    label: "{{ item.name }}"
-
-- name: Deploy the backup service and timer templates
-  ansible.builtin.template:
-    src: "{{ item }}.j2"
-    dest: /etc/systemd/system/{{ item }}
-    owner: root
-    mode: "0644"
-  loop:
-    - btrfs-backup@.service
-    - btrfs-backup@.timer
-
-- name: Enable the automount for each target
-  ansible.builtin.systemd:
-    name: "{{ base_setup_backup_unit_prefix }}-{{ item.name }}.automount"
-    enabled: true
-    state: started
-    daemon_reload: true
-  loop: "{{ base_setup_backup_targets }}"
-  loop_control:
-    label: "{{ item.name }}"
-
-- name: Enable the backup timer for each target
-  ansible.builtin.systemd:
-    name: "btrfs-backup@{{ item.name }}.timer"
-    enabled: true
-    state: started
-    daemon_reload: true
-  loop: "{{ base_setup_backup_targets }}"
-  loop_control:
-    label: "{{ item.name }}"
-
-- name: Enable swap on zram
-  ansible.builtin.copy:
-    dest: /etc/systemd/zram-generator.conf
-    mode: "0644"
-    content: |
-      [zram0]
-      zram-size = min(ram / 2, 4096)
-      compression-algorithm = zstd
-  notify: Start zram swap
+  notify: Reload systemd for crypttab

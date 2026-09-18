@@ -11,27 +11,9 @@ TARGET="${1:?target name not given}"
 SNAP_DIR="${BTRFS_SNAPSHOT_DIR:-/var/services/snapshots}"
 DEST="${BACKUP_ROOT:-/var/backup}/${TARGET}"
 RETENTION_DAYS="${RETENTION_DAYS:-90}"
-MAPPER="backup-${TARGET}"
-
-# An absent target is normal: a USB disk gets unplugged, a NAS goes down. Say
-# so and exit clean. The per-target staleness alert is what notices a target
-# that has been absent for too long.
-if [ ! -e "/dev/disk/by-uuid/${LUKS_UUID}" ]; then
-	echo "btrfs-backup: target ${TARGET} absent, skipping"
-	exit 0
-fi
-
-if [ ! -e "/dev/mapper/${MAPPER}" ]; then
-	cryptsetup open --key-file /etc/luks/backup.key \
-		"UUID=${LUKS_UUID}" "${MAPPER}"
-fi
-
-# Touching the path triggers the automount unit.
-mkdir -p "${DEST}"
-if ! mountpoint -q "${DEST}"; then
-	echo "btrfs-backup: ${DEST} did not mount, skipping ${TARGET}"
-	exit 0
-fi
+# The unit requires the mount, and crypttab opens the container when the disk
+# appears, so by the time this runs the target is there. An absent target fails
+# the unit instead, which is what puts it in the journal.
 
 CUTOFF="$(date -d "-${RETENTION_DAYS} days" +%Y-%m-%d)"
 

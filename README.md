@@ -90,12 +90,20 @@ instance and the alert.
 
 Each target gets:
 
-- a `crypttab` entry with `noauto`, so a missing disk never holds up the boot
+- a `crypttab` entry, opened by systemd when the disk appears, `nofail` so a
+  missing one never holds up the boot
 - `/var/backup/<name>` as an automount, unmounted again after five idle minutes
-- `btrfs-backup@<name>.timer` at 01:00, with its own retention
+- `btrfs-backup@<name>.service`, with its own retention
 
-Targets run independently. One absent disk does not stop another from being
-written.
+There is no timer on the sync. A finished snapshot triggers it, through
+`OnSuccess=` on `btrfs-snapshot@<service>.service`, so the copy is always of
+the snapshot that was just taken. systemd merges the identical start jobs from
+each service, so each target syncs once.
+
+The sync requires its mount. An absent target therefore fails the unit and
+appears in the journal, and `ScheduledJobFailed` reports it. A disk you unplug
+on purpose will alert every night, which is the deliberate trade for never
+missing one that should have been there.
 
 CAUTION: Keep `base_setup_luks_passphrase` somewhere other than this machine.
 One passphrase opens every target, and without it no backup can be read.
@@ -141,13 +149,6 @@ It is therefore off by default, and the role fails with an explanation rather
 than turn it on by itself.
 
 A USB target needs none of this, because it needs no iSCSI.
-
-### Staleness
-
-The backup treats an absent target as a skip and exits 0, so a failure alert
-never fires for a disk that is not there. `BackupStale` in `service-monitoring`
-covers that, per target. It alerts when one target has logged no completed run
-for 48 hours. It stays quiet for a host that runs no backup.
 
 ## Variables
 

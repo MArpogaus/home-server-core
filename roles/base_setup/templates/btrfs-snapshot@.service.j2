@@ -1,5 +1,11 @@
 [Unit]
 Description=Btrfs read-only snapshot of @%i
+{% if base_setup_backup_targets | length > 0 %}
+# A finished snapshot is what triggers the off-box sync. systemd merges the
+# identical start jobs from each service's snapshot, so each target syncs once.
+OnSuccess={% for t in base_setup_backup_targets %}btrfs-backup@{{ t.name }}.service {% endfor %}
+
+{% endif %}
 
 [Service]
 Type=oneshot
