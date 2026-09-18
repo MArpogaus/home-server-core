@@ -85,6 +85,20 @@
     mode: "0755"
   loop: "{{ base_setup_all_services }}"
 
+# SecureBlue installs the harden_container_userns SELinux module, which denies
+# container_runtime_t the creation of a user namespace. Rootless Podman cannot
+# work without one: every podman command fails with "cannot clone: Permission
+# denied". `ujust` owns the module, so it does the toggling.
+- name: Read whether container domains may create user namespaces
+  ansible.builtin.command: ujust set-container-userns status
+  register: base_setup_container_userns
+  changed_when: false
+
+- name: Allow container domains to create user namespaces
+  ansible.builtin.command: ujust set-container-userns on
+  when: "'disabled' in base_setup_container_userns.stdout"
+  changed_when: true
+
 - name: Build SELinux file context targets
   ansible.builtin.set_fact:
     base_setup_selinux_targets:
