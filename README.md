@@ -98,8 +98,8 @@ avc: denied { create } for comm="iscsid"
   scontext=...:iscsid_t:s0 tclass=netlink_iscsi_socket
 ```
 
-The class and both permissions exist in the policy, and `deny_unknown` is 0,
-but a local allow rule for exactly `iscsid_t self:netlink_iscsi_socket
+The class and both permissions exist in the policy, and `deny_unknown` is 0.
+But a local allow rule for exactly `iscsid_t self:netlink_iscsi_socket
 { create bind }` installs and has no effect. That was tested and repeated.
 Only a permissive domain works:
 
@@ -108,9 +108,9 @@ base_setup_iscsi_selinux_permissive: true
 ```
 
 This stops SELinux enforcing iscsid alone. Every other domain stays enforcing,
-and denials for iscsid are still logged. It is weaker than the stock policy,
-so it is off by default and the role fails with an explanation instead of
-turning it on by itself.
+and denials for iscsid are still logged. It is weaker than the stock policy.
+It is therefore off by default, and the role fails with an explanation rather
+than turn it on by itself.
 
 A backup over NFS or SMB needs no policy change. That is the alternative if
 you would rather not relax the policy for iscsid.
@@ -132,8 +132,8 @@ through `/etc/crypttab` and `/etc/fstab`, both with `_netdev,nofail`.
 
 The backup treats an absent target as a skip and exits 0, so a failure alert
 never fires for a disk that is not there. `BackupStale` in `service-monitoring`
-covers that: it alerts when the job has not logged a completed run for 48
-hours, and stays quiet on a host that runs no backup.
+covers that. It alerts when the job has logged no completed run for 48 hours.
+It stays quiet on a host that runs no backup.
 
 ## Variables
 
