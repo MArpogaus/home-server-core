@@ -110,26 +110,30 @@
     setype: container_file_t
     state: present
   loop: "{{ base_setup_selinux_targets }}"
-  register: base_setup_sefcontext
 
-# Only when the rule is new or the subvolume is new. `restorecon -R` walks the
-# whole tree, which is the entire Nextcloud data directory on a real host.
-# Files created later inherit the type from their parent, and podman relabels
-# what it mounts with :z and :Z.
+- name: Read the SELinux type of the service directories
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ [base_setup_services_dir] + base_setup_all_services
+            | map(attribute='name')
+            | map('regex_replace', '^', base_setup_services_dir ~ '/')
+            | list }}"
+  register: base_setup_selinux_stat
+
+# The label itself decides. Ignition creates the subvolumes, so on a fresh host
+# neither the rule nor the subvolume is new, and a guard on those two never
+# fires. `restorecon -R` walks the whole tree, which is the entire Nextcloud
+# data directory on a real host, so it runs only where the type is wrong.
 - name: Apply SELinux labels
   ansible.builtin.command:
-    cmd: restorecon -Rv {{ base_setup_services_dir }}/{{ item.name }}
-  loop: "{{ base_setup_all_services }}"
+    cmd: restorecon -Rv {{ item.item }}
+  loop: "{{ base_setup_selinux_stat.results }}"
   loop_control:
-    label: "{{ item.name }}"
-  when: >-
-    base_setup_sefcontext is changed
-    or item.name in (base_setup_subvol_created.results | default([])
-                     | map(attribute='item.item.name') | list)
-  register: base_setup_restorecon
-  # "not reset as customized by admin" is printed on every run and relabels
-  # nothing, so only a real relabel counts as a change.
-  changed_when: "'Relabeled' in base_setup_restorecon.stdout | default('')"
+    label: "{{ item.item }}"
+  when:
+    - item.stat.exists
+    - item.stat.secontext | default('') is not search(':container_file_t:')
+  changed_when: true
 
 - name: Deploy snapshot service template
   ansible.builtin.template:
@@ -224,6 +228,16 @@
     dest: /etc/sysctl.d/90-unprivileged-port-start.conf
     mode: "0644"
   notify: Apply sysctl setting
+
+- name: Enable swap on zram
+  ansible.builtin.copy:
+    dest: /etc/systemd/zram-generator.conf
+    mode: "0644"
+    content: |
+      [zram0]
+      zram-size = min(ram / 2, 4096)
+      compression-algorithm = zstd
+  notify: Start zram swap
 
 - name: Set up the iSCSI backup target
   ansible.builtin.include_tasks: backup_target.yml
