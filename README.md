@@ -34,8 +34,8 @@ lives in `roles/base_setup/defaults/main.yml`; override entries in
 | Storage | Btrfs subvolume per service under `/var/services`, `snapshots` subvolume |
 | Users | System users, linger, optional extra `groups`; subuid/subgid range starts at `uid * 65536 + 100000`, so it is stable and collision-free |
 | SELinux | `container_file_t` on `/var/services` |
-| Snapshots | `btrfs-snapshot@<svc>.timer` (daily RO snapshot, retention by date in the name) |
-| Backup | `btrfs-backup@<target>.timer` (01:00): incremental `btrfs send` to each configured target that is present |
+| Snapshots | `btrfs-snapshot@<svc>.timer`, on `base_setup_btrfs_snapshot_schedule`; read-only, retention by the date in the name |
+| Backup | `btrfs-backup@<target>.service`, started by a finished snapshot: incremental `btrfs send` to each target |
 | Memory | Swap on zram, sized `min(ram / 2, 4096)` |
 | Updates | `podman-auto-update.timer` per user, `auto-reboot-staged.timer` for rpm-ostree |
 | Firewall | firewalld: ssh, http, https only; `ip_unprivileged_port_start=80` |
