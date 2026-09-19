@@ -185,6 +185,11 @@ allows.
 | `base_setup_backup_root` | `/var/backup` |
 | `base_setup_backup_retention_days` | 90 (per-target fallback) |
 | `base_setup_iscsi_portal` / `_target` | `""` (no iSCSI) |
+| `base_setup_iscsi_lun` / `_device` / `_initiator` / `_chap_user` / `_chap_password` | LUN 0, its `by-path` device, `iqn.2026-01.local.homeserver:t630`, no CHAP |
+| `base_setup_luks_keyfile` | `/etc/luks/backup.key`, written from `base_setup_luks_passphrase` |
+| `base_setup_btrfs_snapshot_dir` | `/var/services/snapshots` |
+| `base_setup_services_path` | the directory that holds the sibling `service-*` repos |
+| `base_setup_subuid_range_size` | `65536`; a service's range starts at `uid * 65536 + 100000` |
 | `base_setup_iscsi_format` | `false` (never erases by default) |
 | `base_setup_luks_passphrase` | required when a backup device is set |
 | `base_setup_firewall_services` | ssh, http, https |
