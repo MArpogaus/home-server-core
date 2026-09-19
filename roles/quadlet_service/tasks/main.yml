@@ -1,0 +1,81 @@
+---
+- name: Ensure the Quadlet directories exist
+  ansible.builtin.file:
+    path: "{{ service_home }}/.config/containers/systemd/configs/{{ item }}"
+    state: directory
+    owner: "{{ service_user }}"
+    group: "{{ service_user }}"
+    mode: '0755'
+  loop: "{{ [''] + query('community.general.filetree', service_repo ~ '/quadlets/configs/')
+            | selectattr('state', 'equalto', 'directory') | map(attribute='path') | list }}"
+
+- name: Deploy the static Quadlets
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ service_home }}/.config/containers/systemd/"
+    owner: "{{ service_user }}"
+    group: "{{ service_user }}"
+    mode: '0644'
+  loop: "{{ query('fileglob', service_repo ~ '/quadlets/*.pod',
+                              service_repo ~ '/quadlets/*.network',
+                              service_repo ~ '/quadlets/*.volume') }}"
+  register: quadlet_service_static
+
+- name: Template the Quadlets
+  ansible.builtin.template:
+    src: "{{ item }}"
+    dest: "{{ service_home }}/.config/containers/systemd/{{ item | basename | regex_replace('\\.j2$', '') }}"
+    owner: "{{ service_user }}"
+    group: "{{ service_user }}"
+    mode: '0644'
+  loop: "{{ query('fileglob', service_repo ~ '/quadlets/*.j2') }}"
+  register: quadlet_service_templated
+
+- name: Deploy the static config files
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ service_home }}/.config/containers/systemd/configs/{{ item.path }}"
+    owner: "{{ service_user }}"
+    group: "{{ service_user }}"
+    mode: "{{ quadlet_service_config_modes[item.path] | default('0644') }}"
+  loop: "{{ query('community.general.filetree', service_repo ~ '/quadlets/configs/')
+            | selectattr('state', 'equalto', 'file') | rejectattr('path', 'search', '\\.j2$') | list }}"
+  loop_control:
+    label: "{{ item.path }}"
+  register: quadlet_service_static_configs
+
+- name: Template the config files
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ service_home }}/.config/containers/systemd/configs/{{ item.path | regex_replace('\\.j2$', '') }}"
+    owner: "{{ service_user }}"
+    group: "{{ service_user }}"
+    mode: "{{ quadlet_service_config_modes[item.path | regex_replace('\\.j2$', '')] | default('0644') }}"
+  loop: "{{ query('community.general.filetree', service_repo ~ '/quadlets/configs/')
+            | selectattr('state', 'equalto', 'file') | selectattr('path', 'search', '\\.j2$') | list }}"
+  loop_control:
+    label: "{{ item.path }}"
+  register: quadlet_service_templated_configs
+
+- name: Reload the user manager
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+    scope: user
+  become: true
+  become_user: "{{ service_user }}"
+  when: quadlet_service_static is changed or quadlet_service_templated is changed
+
+- name: Start the pod, or restart it when its files changed
+  ansible.builtin.systemd_service:
+    name: "{{ quadlet_service_pod }}-pod.service"
+    scope: user
+    state: "{{ 'restarted' if quadlet_service_changed else 'started' }}"
+  become: true
+  become_user: "{{ service_user }}"
+  vars:
+    quadlet_service_changed: >-
+      {{ quadlet_service_restart | bool
+         or quadlet_service_static is changed
+         or quadlet_service_templated is changed
+         or quadlet_service_static_configs is changed
+         or quadlet_service_templated_configs is changed }}
