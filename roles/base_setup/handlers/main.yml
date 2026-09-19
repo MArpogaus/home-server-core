@@ -17,3 +17,8 @@
 - name: Reload systemd for crypttab
   ansible.builtin.systemd:
     daemon_reload: true
+
+- name: Apply EEE now
+  ansible.builtin.command: /etc/NetworkManager/dispatcher.d/10-eee-off {{ item }} up
+  loop: "{{ base_setup_eee_off }}"
+  changed_when: true

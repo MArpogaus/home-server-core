@@ -40,6 +40,7 @@ lives in `roles/base_setup/defaults/main.yml`; override entries in
 | Backup | `btrfs-backup@<target>.service`, started by a finished snapshot: incremental `btrfs send` to each target |
 | Memory | Swap on zram, sized `min(ram / 2, 4096)` |
 | Power | `sleep`, `suspend`, `hibernate` and `hybrid-sleep` targets masked: a server that suspends is down |
+| Network | Energy Efficient Ethernet off on `base_setup_eee_off`, through a NetworkManager dispatcher script |
 | Updates | `podman-auto-update.timer` per user, `auto-reboot-staged.timer` for rpm-ostree |
 | Firewall | firewalld: ssh, http, https only; `ip_unprivileged_port_start=80` |
 
@@ -187,6 +188,7 @@ allows.
 | `base_setup_iscsi_format` | `false` (never erases by default) |
 | `base_setup_luks_passphrase` | required when a backup device is set |
 | `base_setup_firewall_services` | ssh, http, https |
+| `base_setup_eee_off` | `[]` — interfaces whose Realtek PHY drops off the network with EEE on |
 
 ## Installing the real host
 

@@ -228,6 +228,15 @@
     mode: "0644"
   notify: Apply sysctl setting
 
+- name: Turn Energy Efficient Ethernet off on the listed interfaces
+  ansible.builtin.template:
+    src: 10-eee-off.j2
+    dest: /etc/NetworkManager/dispatcher.d/10-eee-off
+    owner: root
+    mode: '0755'
+  when: base_setup_eee_off | length > 0
+  notify: Apply EEE now
+
 - name: Mask every way to sleep
   ansible.builtin.systemd_service:
     name: "{{ item }}"

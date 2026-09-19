@@ -1,0 +1,6 @@
+#!/bin/sh
+# NetworkManager dispatcher: $1 is the interface, $2 the event.
+[ "$2" = up ] || exit 0
+case " {{ base_setup_eee_off | join(' ') }} " in
+*" $1 "*) exec /usr/sbin/ethtool --set-eee "$1" eee off ;;
+esac

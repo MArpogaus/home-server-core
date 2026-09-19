@@ -70,3 +70,6 @@ base_setup_luks_keyfile: /etc/luks/backup.key
 # Required when the portal is set. Keep a copy off this machine: without it the
 # backup cannot be read.
 base_setup_luks_passphrase: ""
+
+# Interfaces that lose the link silently with Energy Efficient Ethernet on.
+base_setup_eee_off: []
