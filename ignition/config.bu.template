@@ -73,26 +73,12 @@ storage:
       contents:
         inline: |
           polkit.addRule(function(action, subject) {
-            if (action.id.indexOf("org.freedesktop.") === 0 &&
+            if (action.id === "org.freedesktop.systemd1.manage-units" &&
+                subject.user === "core" &&
                 subject.isInGroup("wheel")) {
               return polkit.Result.YES;
             }
           });
-    - path: /var/home/core/disable-userns.sh
-      mode: 0755
-      user:
-        name: core
-      group:
-        name: core
-      contents:
-        inline: |
-          #!/usr/bin/env bash
-          # SecureBlue ships the userns hardening module enabled; rootless Podman
-          # needs it off. Runs once on the first login after the rebase reboot.
-          set -euo pipefail
-          ujust set-container-userns on
-          sed -i '/disable-userns.sh/d' /var/home/core/.bash_profile
-          rm -f /var/home/core/disable-userns.sh
     - path: /opt/install_secureblue.sh
       mode: 0755
       contents:
@@ -109,6 +95,7 @@ storage:
 
           # securecore ships its own policy.json; add our signing key to it.
           sudo cp /usr/etc/containers/policy.json /etc/containers/policy.json
+          policy_tmp="$(mktemp)"
           jq --arg image_registry "ghcr.io/marpogaus" \
               '.transports.docker |=
               { $image_registry: [
@@ -119,12 +106,9 @@ storage:
                           "type": "matchRepository"
                       }
                   }
-              ] } + .' /etc/containers/policy.json > POLICY.tmp
-          sudo cp POLICY.tmp /etc/containers/policy.json
-          sudo rm POLICY.tmp
-
-          # Runs on the next login after the reboot (deployed by Ignition below)
-          echo '/var/home/core/disable-userns.sh' >> /var/home/core/.bash_profile
+              ] } + .' /etc/containers/policy.json > "${policy_tmp}"
+          sudo cp "${policy_tmp}" /etc/containers/policy.json
+          rm -f "${policy_tmp}"
 
           sudo sed -i -e '/\/opt\/install_secureblue.sh/d' /var/home/core/.bash_profile
           sudo rm -f /opt/install_secureblue.sh /etc/pki/containers/secureblue-2025.pub

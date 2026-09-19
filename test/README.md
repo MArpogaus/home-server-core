@@ -85,16 +85,17 @@ The rebase takes a few minutes and SSH only answers after the second boot.
 ## Reaching the VM from a rootless container
 
 From the host, `localhost` works. From inside a rootless Podman container it
-does not, and neither does `host.containers.internal`: that name is a pasta
-mapping into a namespace such a container cannot traverse, so every port comes
-back refused even while QEMU is listening on `0.0.0.0`.
-
-Use the host's LAN address instead, which is an ordinary routed destination:
+does not. Two paths reach the forwarded ports, and both break and recover on
+their own, so test both before you debug anything else:
 
 ```bash
-ip -4 addr show scope global | grep inet    # on the host
-TARGET_HOST=<that address> ./functional_test.sh
+timeout 3 bash -c 'echo > /dev/tcp/169.254.1.2/2222'      # host.containers.internal
+ip -4 addr show scope global | grep inet                   # on the host: its LAN address
+TARGET_HOST=<the one that answers> ./functional_test.sh
 ```
+
+A dead path answers `Connection refused` on every port, including ports where
+nothing listens, so refusal says nothing about the VM.
 
 `deploy.sh`, `functional_test.sh` and `reset.sh` all honour `TARGET_HOST` and
 `TARGET_PORT`.

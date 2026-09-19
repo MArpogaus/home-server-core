@@ -1,4 +1,20 @@
 ---
+- name: Let run0 work without a terminal
+  hosts: all
+  gather_facts: false
+  become_method: community.general.run0
+  vars:
+    ansible_ssh_extra_args: -o RequestTTY=yes
+  pre_tasks:
+    - name: Ensure the local policy directory exists
+      ansible.builtin.file:
+        path: /etc/selinux/local
+        state: directory
+        owner: root
+        mode: '0755'
+  roles:
+    - run0_pipe_policy
+
 - name: Full deployment — base setup, services, and startup
   hosts: all
   gather_facts: true

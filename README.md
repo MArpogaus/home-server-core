@@ -12,13 +12,15 @@ Target: a thin client with 8 GB RAM, one Btrfs SSD, rootless Podman Quadlets.
 ## Architecture
 
 ```
-site.yml (1 play)
-  ├── base_setup role (this repo)   Btrfs subvolumes, users, subuid, SELinux,
-  │                                 snapshots, off-box backup, zram, firewall,
-  │                                 auto-update / auto-reboot timers
-  ├── nextcloud_service role        service-nextcloud
-  ├── bunker_service role           service-bunker
-  └── monitoring_service role       service-monitoring
+site.yml
+  play 1  run0_pipe_policy role     SELinux module that lets run0 --pipe work,
+                                    installed with the collection's run0 plugin
+  play 2  base_setup role           Btrfs subvolumes, users, subuid, SELinux,
+          │                         snapshots, off-box backup, zram, firewall,
+          │                         auto-update / auto-reboot timers
+          └── one service role per entry in base_setup_all_services
+                └── quadlet_service role   deploys quadlets/ and quadlets/configs/,
+                                           reloads, restarts the pod on change
 ```
 
 One Linux user per service, each with its own systemd user manager and Podman
@@ -149,6 +151,24 @@ It is therefore off by default, and the role fails with an explanation rather
 than turn it on by itself.
 
 A USB target needs none of this, because it needs no iSCSI.
+
+## Privilege escalation
+
+Ansible becomes root and the service users with `run0`, through
+`plugins/become/run0_pipe.py`. That plugin calls `run0 --pipe`, which needs no
+terminal, so Ansible can pipeline: one SSH operation per task instead of eight.
+`become_method` in `ansible.cfg` switches back to `community.general.run0` if
+the local plugin ever breaks.
+
+Two things on the host make it work:
+
+| What | Installed by | Why |
+|---|---|---|
+| `/etc/polkit-1/rules.d/60-run0-fast-user-auth.rules` | Ignition | Grants `org.freedesktop.systemd1.manage-units` to `core` without authentication. Ansible cannot install the rule it needs to run at all |
+| `/etc/selinux/local/ansible_run0_pipe.te` | the first play of `site.yml`, with the collection's `run0` plugin | Lets systemd read the pipes of the SSH session, which `run0 --pipe` hands it |
+
+`DECISIONS.md` records why, and `HARDENING.md` records what the SELinux module
+allows.
 
 ## Variables
 

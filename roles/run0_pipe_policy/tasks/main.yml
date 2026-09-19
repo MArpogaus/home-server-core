@@ -1,0 +1,23 @@
+---
+- name: Install the policy source
+  ansible.builtin.copy:
+    src: ansible_run0_pipe.te
+    dest: /etc/selinux/local/ansible_run0_pipe.te
+    owner: root
+    mode: '0644'
+  register: run0_pipe_policy_source
+
+- name: Read the loaded SELinux modules
+  ansible.builtin.command: semodule -l
+  register: run0_pipe_policy_loaded
+  changed_when: false
+
+- name: Build and load the module
+  ansible.builtin.shell:
+    cmd: >-
+      cd /etc/selinux/local &&
+      checkmodule -M -m -o ansible_run0_pipe.mod ansible_run0_pipe.te &&
+      semodule_package -o ansible_run0_pipe.pp -m ansible_run0_pipe.mod &&
+      semodule -i ansible_run0_pipe.pp
+  when: run0_pipe_policy_source is changed or 'ansible_run0_pipe' not in run0_pipe_policy_loaded.stdout_lines
+  changed_when: true

@@ -1,0 +1,11 @@
+module ansible_run0_pipe 1.0;
+
+require {
+    type init_t;
+    type system_dbusd_t;
+    type sshd_session_t;
+    class fifo_file { ioctl read write };
+}
+
+allow init_t sshd_session_t:fifo_file { ioctl read write };
+allow system_dbusd_t sshd_session_t:fifo_file { read write };
