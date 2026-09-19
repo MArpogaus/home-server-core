@@ -66,7 +66,7 @@ def parse_args(argv=None):
                         help="guest RAM in MB (default: %(default)s)")
     parser.add_argument("--cpus", default="2", metavar="N",
                         help="guest vCPUs (default: %(default)s)")
-    parser.add_argument("--disk-size", default="20G", metavar="SIZE",
+    parser.add_argument("--disk-size", default="40G", metavar="SIZE",
                         help="grow the disk image to this size (default: %(default)s)")
     parser.add_argument("--ssh-port", default=2222, type=int, metavar="PORT",
                         help="host port forwarded to the guest's SSH (default: %(default)s)")

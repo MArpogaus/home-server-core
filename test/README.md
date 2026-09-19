@@ -61,7 +61,7 @@ on a first boot only.
 ## What start_vm.py does
 
 1. Creates `coreos_key` if missing.
-2. Downloads and extracts the FCOS image, grows it to 20 GB. The `.xz` stays as
+2. Downloads and extracts the FCOS image, grows it to 40 GB. The `.xz` stays as
    a cache, so `--fresh` skips the download.
 3. Renders `config.bu` from `config.bu.template` with the public key and, if
    `mkpasswd` is available, a console password (`VM_PASSWORD`, default `test`).
