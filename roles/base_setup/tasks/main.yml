@@ -112,28 +112,20 @@
   loop: "{{ base_setup_selinux_targets }}"
 
 - name: Read the SELinux type of the service directories
-  ansible.builtin.stat:
-    path: "{{ item }}"
-  loop: "{{ [base_setup_services_dir] + base_setup_all_services
-            | map(attribute='name')
-            | map('regex_replace', '^', base_setup_services_dir ~ '/')
-            | list }}"
-  register: base_setup_selinux_stat
+  ansible.builtin.command:
+    cmd: >-
+      stat -c '%n %C' {{ base_setup_services_dir }}
+      {{ base_setup_all_services | map(attribute='name')
+         | map('regex_replace', '^', base_setup_services_dir ~ '/') | join(' ') }}
+  register: base_setup_labels
+  changed_when: false
 
-# The label itself decides. Ignition creates the subvolumes, so on a fresh host
-# neither the rule nor the subvolume is new, and a guard on those two never
-# fires. `restorecon -R` walks the whole tree, which is the entire Nextcloud
-# data directory on a real host, so it runs only where the type is wrong.
 - name: Apply SELinux labels
   ansible.builtin.command:
-    cmd: restorecon -Rv {{ item.item }}
-  loop: "{{ base_setup_selinux_stat.results }}"
-  loop_control:
-    label: "{{ item.item }}"
-  when:
-    - item.stat.exists
-    - item.stat.secontext | default('') is not search(':container_file_t:')
-  changed_when: true
+    cmd: restorecon -Rv {{ item.split(' ') | first }}
+  loop: "{{ base_setup_labels.stdout_lines | reject('search', ':container_file_t:') | list }}"
+  register: base_setup_restorecon
+  changed_when: "'Relabeled' in base_setup_restorecon.stdout"
 
 - name: Deploy snapshot service template
   ansible.builtin.template:
@@ -197,12 +189,19 @@
     state: started
     daemon_reload: true
 
+# run0 exports XDG_RUNTIME_DIR for the target user, so the user manager is
+# reachable through become_user and the module reports its own changes.
 - name: Enable podman auto-update timer for service users
-  ansible.builtin.command: # noqa: command-instead-of-module
-    cmd: systemctl --user -M {{ item.name }}@ enable --now podman-auto-update.timer
+  ansible.builtin.systemd_service:
+    name: podman-auto-update.timer
+    scope: user
+    enabled: true
+    state: started
+  become: true
+  become_user: "{{ item.name }}"
   loop: "{{ base_setup_all_services }}"
-  register: base_setup_auto_update_enable
-  changed_when: "'Created symlink' in base_setup_auto_update_enable.stderr"
+  loop_control:
+    label: "{{ item.name }}"
 
 - name: Ensure firewalld is running
   ansible.builtin.systemd:
