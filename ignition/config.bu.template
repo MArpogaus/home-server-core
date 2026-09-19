@@ -86,15 +86,15 @@ storage:
           #!/usr/bin/env bash
           set -e
 
-          sudo systemctl disable --now zincati.service 2>/dev/null || true
-          sudo systemctl stop rpm-ostreed-automatic.timer rpm-ostreed-automatic.service 2>/dev/null || true
+          systemctl disable --now zincati.service 2>/dev/null || true
+          systemctl stop rpm-ostreed-automatic.timer rpm-ostreed-automatic.service 2>/dev/null || true
 
           echo 'Rebasing to securecore (SecureBlue CoreOS image)...'
           # set -e aborts the script if this fails, so there is no status check.
-          sudo rpm-ostree rebase ostree-image-signed:docker://ghcr.io/secureblue/securecore-main-hardened:latest
+          rpm-ostree rebase ostree-image-signed:docker://ghcr.io/secureblue/securecore-main-hardened:latest
 
           # securecore ships its own policy.json; add our signing key to it.
-          sudo cp /usr/etc/containers/policy.json /etc/containers/policy.json
+          cp /usr/etc/containers/policy.json /etc/containers/policy.json
           policy_tmp="$(mktemp)"
           jq --arg image_registry "ghcr.io/marpogaus" \
               '.transports.docker |=
@@ -107,25 +107,31 @@ storage:
                       }
                   }
               ] } + .' /etc/containers/policy.json > "${policy_tmp}"
-          sudo cp "${policy_tmp}" /etc/containers/policy.json
+          cp "${policy_tmp}" /etc/containers/policy.json
           rm -f "${policy_tmp}"
 
-          sudo sed -i -e '/\/opt\/install_secureblue.sh/d' /var/home/core/.bash_profile
-          sudo rm -f /opt/install_secureblue.sh /etc/pki/containers/secureblue-2025.pub
+          rm -f /opt/install_secureblue.sh /etc/pki/containers/secureblue-2025.pub
 
           echo 'Rebooting...'
           sleep 5
-          sudo systemctl reboot
-    - path: /var/home/core/.bash_profile
-      overwrite: false
-      user:
-        name: core
-      group:
-        name: core
-      append:
-        - inline: |
-            /opt/install_secureblue.sh
+          systemctl reboot
 systemd:
   units:
+    - name: install-secureblue.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Rebase to SecureBlue on the first boot
+        ConditionPathExists=/opt/install_secureblue.sh
+        Wants=network-online.target
+        After=network-online.target
+
+        [Service]
+        Type=oneshot
+        WorkingDirectory=/var/tmp
+        ExecStart=/opt/install_secureblue.sh
+
+        [Install]
+        WantedBy=multi-user.target
     - name: qemu-guest-agent.service
       enabled: true

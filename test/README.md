@@ -74,13 +74,16 @@ on a first boot only.
 ## Boot sequence
 
 ```
-FCOS first boot → Ignition applies config.ign → install_secureblue.sh
+FCOS first boot → Ignition applies config.ign
+  → install-secureblue.service runs /opt/install_secureblue.sh
   → rpm-ostree rebase to securecore → reboot
-  → first login runs disable-userns.sh (rootless Podman needs userns)
   → SSH available, ready for Ansible
 ```
 
 The rebase takes a few minutes and SSH only answers after the second boot.
+Nothing waits for a login: the first boot does the work on its own. Until the
+reboot the host is stock FCOS, which has no python3, so a deploy started too
+early fails with `The module interpreter '/usr/bin/python3' was not found`.
 
 ## Reaching the VM from a rootless container
 
