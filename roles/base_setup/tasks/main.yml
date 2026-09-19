@@ -228,6 +228,16 @@
     mode: "0644"
   notify: Apply sysctl setting
 
+- name: Mask every way to sleep
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    masked: true
+  loop:
+    - sleep.target
+    - suspend.target
+    - hibernate.target
+    - hybrid-sleep.target
+
 - name: Enable swap on zram
   ansible.builtin.copy:
     dest: /etc/systemd/zram-generator.conf

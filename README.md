@@ -39,6 +39,7 @@ lives in `roles/base_setup/defaults/main.yml`; override entries in
 | Snapshots | `btrfs-snapshot@<svc>.timer`, on `base_setup_btrfs_snapshot_schedule`; read-only, retention by the date in the name |
 | Backup | `btrfs-backup@<target>.service`, started by a finished snapshot: incremental `btrfs send` to each target |
 | Memory | Swap on zram, sized `min(ram / 2, 4096)` |
+| Power | `sleep`, `suspend`, `hibernate` and `hybrid-sleep` targets masked: a server that suspends is down |
 | Updates | `podman-auto-update.timer` per user, `auto-reboot-staged.timer` for rpm-ostree |
 | Firewall | firewalld: ssh, http, https only; `ip_unprivileged_port_start=80` |
 
