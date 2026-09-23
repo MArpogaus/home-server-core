@@ -1,0 +1,61 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Container image tags in the defaults of an Ansible service role. Dependabot covers the actions and the pre-commit hooks.",
+  "extends": [
+    "config:recommended",
+    ":semanticCommitTypeAll(chore)"
+  ],
+  "baseBranches": [
+    "dev"
+  ],
+  "enabledManagers": [
+    "custom.regex"
+  ],
+  "schedule": [
+    "before 6am on monday"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/(^|/)(ansible-role|roles)/[^/]+/defaults/main\\.yml$/"
+      ],
+      "matchStrings": [
+        "_image:\\s*[\"']?(?<depName>[^\"'\\s:@]+):(?<currentValue>[^\"'\\s@]+)[\"']?"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "BunkerWeb and its scheduler must carry the same tag.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "docker.io/bunkerity/**"
+      ],
+      "groupName": "bunkerweb"
+    },
+    {
+      "description": "This project builds and tags its own images, and the workflow matrix decides the major version.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/marpogaus/**"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "The placeholder image of home-server-template.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "docker.io/example/**"
+      ],
+      "enabled": false
+    }
+  ]
+}

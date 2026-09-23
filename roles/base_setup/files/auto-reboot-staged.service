@@ -1,0 +1,7 @@
+[Unit]
+Description=Reboot if rpm-ostree has a staged deployment
+ConditionPathExists=/run/ostree/staged-deployment
+
+[Service]
+Type=oneshot
+ExecStart=systemctl reboot --check-inhibitors=yes
