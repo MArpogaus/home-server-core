@@ -115,7 +115,7 @@ def build_ignition():
     if shutil.which("mkpasswd"):
         password = os.environ.get("VM_PASSWORD", "test")
         env["PASSWORD_HASH"] = subprocess.run(
-            ["mkpasswd", "--method=yescrypt", password],
+            ["mkpasswd", "--method=yescrypt", "--stdin"], input=password,
             check=True, capture_output=True, text=True).stdout.strip()
     else:
         print("mkpasswd not found — no console password, SSH key only")
