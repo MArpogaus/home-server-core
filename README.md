@@ -66,6 +66,10 @@ base_setup_services:
     repo: immich
 ```
 
+A service's `uid` never changes after its first deploy. It sets the subuid
+range, and every image layer and data file of the service is owned inside that
+range.
+
 An image that this project's cosign key does not sign needs nothing further.
 `base_setup` reads every `*_image` default of every service role, and every
 `<repo>_service_*_image` variable the deployment sets for this host, and writes
