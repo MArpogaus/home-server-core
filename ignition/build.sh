@@ -2,15 +2,15 @@
 # Renders the Ignition config for the real hardware and writes it to a disk or
 # an ISO. It needs podman, which runs butane and the installer.
 #
-#   ./build.sh ign                      only render config.ign
-#   ./build.sh install /dev/sdX         install Fedora CoreOS onto that disk
-#   ./build.sh iso <live.iso> /dev/sdX  write an unattended installer ISO
+#   ./build.sh [--platform <file.bu>] ign                      only render config.ign
+#   ./build.sh [--platform <file.bu>] install /dev/sdX         install onto that disk
+#   ./build.sh [--platform <file.bu>] iso <live.iso> /dev/sdX  write an installer ISO
 #
 # <live.iso> is the stock Fedora CoreOS live image. /dev/sdX is the disk of the
 # machine that will boot the ISO, not a disk of this one.
 #
-# PLATFORM_BU names an optional Butane fragment that the deployment provides,
-# such as a rebase to a derivative image. It is merged into the config.
+# --platform names a Butane fragment that the deployment provides, such as a
+# rebase to a derivative image. It is merged into the config.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,8 +19,14 @@ BUTANE_CONFIG="${HERE}/config.bu"
 IGNITION="${HERE}/config.ign"
 INSTALLER_IMAGE="quay.io/coreos/coreos-installer:release"
 
-usage() { echo "usage: $0 [ign | install /dev/sdX | iso <live.iso> /dev/sdX]"; exit 1; }
+usage() { echo "usage: $0 [--platform <file.bu>] [ign | install /dev/sdX | iso <live.iso> /dev/sdX]"; exit 1; }
 
+PLATFORM=""
+if [ "${1:-}" = "--platform" ]; then
+	[ -f "${2:-}" ] || { echo "ERROR: no such platform fragment: ${2:-}"; exit 1; }
+	PLATFORM="$(realpath "$2")"
+	shift 2
+fi
 MODE="${1:-ign}"
 case "${MODE}" in
 ign) ;;
@@ -74,8 +80,8 @@ if [ "${PASSWORD_HASH}" = "none" ]; then
 	sed -i '/password_hash:/d' "${BUTANE_CONFIG}"
 fi
 rm -f "${HERE}/platform.ign"
-if [ -n "${PLATFORM_BU:-}" ]; then
-	"${BUTANE[@]}" --strict < "${PLATFORM_BU}" > "${HERE}/platform.ign"
+if [ -n "${PLATFORM}" ]; then
+	"${BUTANE[@]}" --strict < "${PLATFORM}" > "${HERE}/platform.ign"
 	printf 'ignition:\n  config:\n    merge:\n      - local: platform.ign\n' >> "${BUTANE_CONFIG}"
 fi
 (cd "${HERE}" && "${BUTANE[@]}" --pretty --strict --files-dir . config.bu) > "${IGNITION}"

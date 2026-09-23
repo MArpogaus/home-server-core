@@ -48,6 +48,8 @@ def parse_args(argv=None):
     mode.add_argument("--save-base", action="store_true",
                       help=f'tag the current disk state "{BASE_SNAPSHOT}" '
                            "(the VM must be shut down) and exit")
+    parser.add_argument("--platform", type=os.path.abspath, metavar="FILE.bu",
+                        help="Butane fragment merged into the config on --fresh")
     return parser.parse_args(argv)
 
 
@@ -105,7 +107,7 @@ def ensure_disk(fresh):
     print(f"Disk: {os.path.getsize(DISK) // 1024 // 1024} MB")
 
 
-def build_ignition():
+def build_ignition(platform):
     """Hand the key and the password to ignition/build.sh, the one renderer."""
     env = dict(os.environ)
     with open(SSH_KEY + ".pub") as handle:
@@ -121,7 +123,8 @@ def build_ignition():
         print("mkpasswd not found — no console password, SSH key only")
         env["PASSWORD_HASH"] = "none"
 
-    result = subprocess.run([BUILD_SH, "ign"], env=env,
+    platform_args = ["--platform", platform] if platform else []
+    result = subprocess.run([BUILD_SH, *platform_args, "ign"], env=env,
                             capture_output=True, text=True)
     if result.returncode != 0:
         fail(f"build.sh failed:\n{result.stdout}{result.stderr}")
@@ -171,7 +174,7 @@ def main(argv=None):
         # Ignition runs on first boot only, so it would ignore the config.
         ignition_args = []
     else:
-        build_ignition()
+        build_ignition(args.platform)
         ignition_args = ["-fw_cfg", f"name=opt/com.coreos/config,file={IGNITION}"]
 
     print(f"SSH: ssh -p {SSH_PORT} -i {SSH_KEY} core@localhost   Stop: Ctrl+C")

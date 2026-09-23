@@ -1,11 +1,11 @@
 # Test VM
 
-A Fedora CoreOS guest for the playbook. `PLATFORM_BU` names the deployment's
+A Fedora CoreOS guest for the playbook. `--platform` names the deployment's
 Butane fragment, so the guest runs the same platform steps as the real host,
 such as a rebase to a derivative image:
 
 ```bash
-export PLATFORM_BU="$PWD/../../home-server-secrets/ignition/secureblue.bu"
+python3 start_vm.py --fresh --platform ../../home-server-secrets/ignition/secureblue.bu
 ```
 
 ## Use

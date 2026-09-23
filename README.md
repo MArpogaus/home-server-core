@@ -98,7 +98,7 @@ belongs in the role, with its value in the deployment. A platform step is the
 exception. These roles target stock Fedora CoreOS, so a step that only a
 derivative image needs lives in the deployment too, even when every host runs
 one. The same holds for the Ignition config: `ignition/build.sh` merges the
-Butane fragment that `PLATFORM_BU` names, such as a rebase to a derivative
+Butane fragment that `--platform` names, such as a rebase to a derivative
 image, into the config.
 
 ## Privilege escalation
