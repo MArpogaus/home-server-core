@@ -43,6 +43,7 @@ receive*)
 	read -r line
 	src="${line#SEND:}"
 	mkdir -p "$2/$(basename "${src}")"
+	[ -e "$2/.error" ] && exit 1
 	[ -e "$2/.fail" ] && exit 0
 	: >"$2/$(basename "${src}")/.received"
 	: >"$2/$(basename "${src}")/.subvol"
@@ -142,6 +143,11 @@ setup_unfinished_one_of_two() {
 	: >"$1/backup/t/aaa/.fail"
 }
 
+setup_failed_one_of_two() {
+	mkdir -p "$1/snap/aaa/${D3}" "$1/snap/zzz/${D3}" "$1/backup/t/aaa"
+	: >"$1/backup/t/aaa/.error"
+}
+
 setup_field_gone() {
 	mkdir -p "$1/snap/nextcloud/${D3}"
 	place "$1/backup/t/nextcloud/${D1}" nofield
@@ -166,6 +172,7 @@ run_case "a missing field keeps every copy"        0 3 setup_field_gone
 run_case "a future-dated snapshot is ignored"      0 1 setup_future_snapshot "${D3}"
 run_case "a refused service does not stop the rest" 1 3 setup_refuse_one_of_two
 run_case "an unfinished receive does not stop the rest" 1 2 setup_unfinished_one_of_two "" "did not finish"
+run_case "a failed receive does not stop the rest"  1 2 setup_failed_one_of_two "" "did not finish"
 run_case "a named snapshot is not the latest"      0 1 setup_named_snapshot "${D3}"
 run_case "retention deletes an unreceivable leftover" 0 1 setup_field_gone_old_partial "${D3}"
 

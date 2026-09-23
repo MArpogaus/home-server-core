@@ -76,9 +76,9 @@ for src in "${SNAP_DIR}"/*/; do
 	else
 		parent="$(comm -12 <(snapshots "${src}") <(received_snapshots "${DEST}/${svc}") | tail -n1)"
 		if [ -n "${parent}" ]; then
-			btrfs send -q -p "${src}${parent}" "${src}${latest}" | btrfs receive "${DEST}/${svc}"
+			btrfs send -q -p "${src}${parent}" "${src}${latest}" | btrfs receive "${DEST}/${svc}" || true
 		else
-			btrfs send -q "${src}${latest}" | btrfs receive "${DEST}/${svc}"
+			btrfs send -q "${src}${latest}" | btrfs receive "${DEST}/${svc}" || true
 		fi
 		if ! received "${DEST}/${svc}/${latest}"; then
 			echo "ERROR: ${svc}/${latest} did not finish" >&2
